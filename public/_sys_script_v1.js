@@ -122,7 +122,7 @@ function formatLastSeenTime(timestamp) {
 }
 
 // -------------------------------------------------------------
-// PROFILE / CONTACT TAB FIXES (from index.html to Window)
+// PROFILE / CONTACT TAB FIXES
 // -------------------------------------------------------------
 
 window.switchContactTab = function(tab) {
@@ -179,7 +179,12 @@ window.openUserProfileDirect = async function(uid) {
     if (!u) return window.showToast("User not found", "exclamation-circle", "text-red-400");
 
     document.getElementById('overlay-profile-dp').src = u.dp || 'https://placehold.co/150';
-    document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${u.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-xs ml-1"></i>' : ''}`;
+    
+    // Check Custom Tick Color
+    let tColor = u.verifiedTickColor || 'text-blue-500';
+    let verifiedIcon = (u.isVerified || u.isPremium) ? `<i class="fas fa-check-circle ${tColor} text-xs ml-1"></i>` : '';
+    document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${verifiedIcon}`;
+    
     document.getElementById('overlay-profile-username').textContent = `@${u.username}`;
     document.getElementById('overlay-profile-bio').textContent = u.bio || 'No bio available';
     document.getElementById('overlay-profile-birthday').textContent = u.birthday || 'Not Provided';
@@ -211,7 +216,7 @@ window.openChatHeaderTarget = function() {
 };
 
 // -------------------------------------------------------------
-// STORIES RENDERING & FULLSCREEN VIEWER
+// STORIES RENDERING
 // -------------------------------------------------------------
 window.renderStoriesFeed = async function() {
     const container = document.getElementById('stories-feed-container');
@@ -689,6 +694,7 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
+            // EXACT NAME BUG FIX: Strict ID extraction without array index mixups
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -706,6 +712,7 @@ function listenToActiveChatsLive() {
             let dp = chatMeta.dp;
             let username = chatMeta.username || otherUid;
             let isVerified = chatMeta.isVerified || false;
+            let tickColor = 'text-blue-500';
             let isOfficial = otherUid === OFFICIAL_SYSTEM_UID;
 
             if (isSelf) {
@@ -726,13 +733,14 @@ function listenToActiveChatsLive() {
                 username = typeof u.username === 'string' ? u.username : otherUid;
                 dp = u.dp || `https://placehold.co/150/2563eb/ffffff?text=${name.charAt(0).toUpperCase()}`;
                 isVerified = Boolean(u.isVerified || u.isPremium);
+                tickColor = u.verifiedTickColor || 'text-blue-500';
             }
             
             let displayLastMsg = decryptData(chatMeta.lastMessage) || 'Conversation started';
 
             list.push({
                 id: cId, targetUid: otherUid || null, name: name || 'User', username: username || 'user',
-                dp: dp || 'https://placehold.co/150/2563eb/ffffff?text=U', isVerified: Boolean(isVerified),
+                dp: dp || 'https://placehold.co/150/2563eb/ffffff?text=U', isVerified: Boolean(isVerified), tickColor,
                 isOfficial: isOfficial, isSelf: isSelf, isGroup: Boolean(chatMeta.isGroup),
                 lastMessage: displayLastMsg, timestamp: chatMeta.timestamp || 0,
                 time: chatMeta.timestamp ? new Date(chatMeta.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
@@ -768,6 +776,8 @@ function renderChatList() {
         const div = document.createElement('div');
         div.className = `flex items-center px-5 py-3.5 cursor-pointer border-b border-gray-100 dark:border-white/5 transition-colors ${chat.pinned ? 'pinned-bg' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`;
 
+        let vHtml = chat.isVerified ? `<i class="fas fa-check-circle ${chat.tickColor} text-[10px]"></i>` : '';
+
         div.innerHTML = `
             ${isSelectionMode ? `<input type="checkbox" class="w-4 h-4 rounded mr-3 text-blue-600 pointer-events-none" ${isSelected ? 'checked' : ''}>` : ''}
             <div class="relative shrink-0 mr-3.5">
@@ -776,7 +786,7 @@ function renderChatList() {
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-center mb-0.5">
-                    <h4 class="font-bold text-xs truncate flex items-center gap-1 text-gray-900 dark:text-white">${chat.name} ${chat.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-[10px]"></i>' : ''}</h4>
+                    <h4 class="font-bold text-xs truncate flex items-center gap-1 text-gray-900 dark:text-white">${chat.name} ${vHtml}</h4>
                     <span class="text-[10px] text-gray-400">${chat.time || ''}</span>
                 </div>
                 <div class="flex justify-between items-center">
@@ -815,13 +825,15 @@ function openChat(chat) {
     const displayName = isSelf ? 'Saved Messages' : chat.name;
 
     const nameEl = document.getElementById('active-chat-name');
-    if (nameEl) nameEl.innerHTML = `${displayName} ${chat.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-xs ml-1"></i>' : ''}`;
+    let vHtml = chat.isVerified ? `<i class="fas fa-check-circle ${chat.tickColor || 'text-blue-500'} text-xs ml-1"></i>` : '';
+    if (nameEl) nameEl.innerHTML = `${displayName} ${vHtml}`;
+    
     const dpEl = document.getElementById('active-chat-dp');
     if (dpEl) dpEl.src = chat.dp;
     const statusEl = document.getElementById('active-chat-status');
 
-    if (liveStatusUnsub) liveStatusUnsub();
-    if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
+    if (liveStatusUnsub) { liveStatusUnsub(); liveStatusUnsub = null; }
+    if (window.targetChatMetaUnsub) { window.targetChatMetaUnsub(); window.targetChatMetaUnsub = null; }
     window.isTargetUnread = true; 
     
     if (isSelf) {
@@ -832,7 +844,7 @@ function openChat(chat) {
         if (statusEl) statusEl.textContent = 'Tap for group info';
     } else if (chat.targetUid) {
         liveStatusUnsub = onValue(ref(db, `${dbUsersPath}/${chat.targetUid}/status`), (snap) => {
-            if (!statusEl) return;
+            if (!statusEl || window.activeChatUserId !== chat.targetUid) return;
             const s = snap.val();
             
             if(s && s.typingTo === window.currentUser.uid) {
@@ -847,6 +859,7 @@ function openChat(chat) {
         });
         
         window.targetChatMetaUnsub = onValue(ref(db, `${dbUserChatsPath}/${chat.targetUid}/${chat.id}/unread`), (snap) => {
+            if(window.activeChatUserId !== chat.targetUid) return;
             window.isTargetUnread = snap.exists() ? snap.val() : true;
             renderMessagesUI();
         });
@@ -879,10 +892,9 @@ if(msgInputEl) {
 }
 
 document.getElementById('back-from-chat').onclick = () => {
-    if (messagesUnsub) messagesUnsub();
-    if (liveStatusUnsub) liveStatusUnsub();
-    if (typingStatusUnsub) typingStatusUnsub();
-    if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
+    if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
+    if (liveStatusUnsub) { liveStatusUnsub(); liveStatusUnsub = null; }
+    if (window.targetChatMetaUnsub) { window.targetChatMetaUnsub(); window.targetChatMetaUnsub = null; }
     
     if(window.currentUser) {
         set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null).catch(()=>{});
@@ -976,9 +988,11 @@ function loadLiveMessages(chatId) {
     if (!container) return;
     container.innerHTML = '<div class="p-6 text-center text-gray-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>';
 
-    if (messagesUnsub) messagesUnsub();
+    if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
 
     messagesUnsub = onValue(ref(db, `${dbChatsPath}/${chatId}/messages`), (snapshot) => {
+        if(window.activeChatId !== chatId) return; // double check
+
         const data = snapshot.val();
         if (!data) {
             currentChatMessages = [];
@@ -1214,7 +1228,8 @@ function performLiveSearch(query) {
             matches.push({
                 uid, name, username: u.username || uid,
                 dp: u.dp || `https://placehold.co/150/2563eb/ffffff?text=${name.charAt(0).toUpperCase()}`,
-                isVerified: Boolean(u.isVerified || u.isPremium)
+                isVerified: Boolean(u.isVerified || u.isPremium),
+                tickColor: u.verifiedTickColor || 'text-blue-500'
             });
         }
     }
@@ -1228,10 +1243,12 @@ function performLiveSearch(query) {
     matches.forEach(u => {
         const div = document.createElement('div');
         div.className = 'flex items-center px-5 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer btn-press border-b border-gray-100 dark:border-white/5 transition-colors';
+        
+        let vHtml = u.isVerified ? `<i class="fas fa-check-circle ${u.tickColor} text-xs"></i>` : '';
         div.innerHTML = `
             <img src="${u.dp}" class="w-11 h-11 rounded-full object-cover mr-3.5 shadow-sm bg-white border border-gray-50 dark:border-white/10">
             <div class="flex-1 min-w-0">
-                <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">${u.name} ${u.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-xs"></i>' : ''}</h4>
+                <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">${u.name} ${vHtml}</h4>
                 <p class="text-xs text-blue-500">@${u.username}</p>
             </div>
             <i class="fas fa-comment-dots text-gray-300 dark:text-gray-600 text-base"></i>
@@ -1337,7 +1354,8 @@ window.contactSupportInApp = async () => {
 function populateUserData() {
     if (!window.currentUser) return;
     const isPrem = window.currentUser.isPremium === true;
-    const badgeHtml = isPrem ? '<i class="fas fa-check-circle text-blue-500 text-xs ml-1"></i>' : '';
+    const tickColor = window.currentUser.verifiedTickColor || 'text-blue-500';
+    const badgeHtml = isPrem ? `<i class="fas fa-check-circle ${tickColor} text-xs ml-1"></i>` : '';
 
     const setTopName = document.getElementById('settings-top-name');
     if (setTopName) setTopName.innerHTML = `${window.currentUser.name} ${badgeHtml}`;
@@ -1561,6 +1579,20 @@ window.selectProfileIcon = (icon) => {
         if(patternLayer) patternLayer.innerHTML = '';
         document.getElementById('current-icon-status').innerText = 'Off';
     }
+};
+
+// CUSTOM TICK COLOR UPDATER
+window.selectTickColor = async (colorClass) => {
+    if (!window.currentUser.isPremium) {
+        window.showToast("Premium feature!", "lock", "text-amber-500");
+        return;
+    }
+    window.currentUser.verifiedTickColor = colorClass;
+    await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { verifiedTickColor: colorClass });
+    localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+    populateUserData();
+    window.showToast("Verified tick color updated!");
+    window.closeAdvancedColorPicker();
 };
 
 window.applyAdvancedProfileColor = async () => {
@@ -2058,7 +2090,6 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
-        // Data is already encrypted in DB, copy as is for forward
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
         
@@ -2122,6 +2153,7 @@ window.initiateReply = (msgId) => {
 };
 
 window.cancelReply = () => { currentReplyTarget = null; document.getElementById('reply-preview-bar')?.classList.add('hidden'); };
+
 window.deleteMessage = (id) => {
     window.appConfirm("Delete this message?", async () => {
         await remove(ref(db, `${dbChatsPath}/${window.activeChatId}/messages/${id}`));
@@ -2343,6 +2375,7 @@ function setupDomListeners() {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
                 const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
                 
+                // DECRYPT PASSWORD FOR CHECKING
                 if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
 
@@ -2384,6 +2417,7 @@ function setupDomListeners() {
                     }
                 }
 
+                // ENCRYPT PASSWORD BEFORE SAVING
                 const encPass = encryptData(pass);
                 const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
                 const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
@@ -2413,6 +2447,18 @@ function setupDomListeners() {
     document.getElementById('change-dp-input').onchange = async (e) => {
         if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 240); window.currentUser.dp = b64; await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); populateUserData(); window.showToast('Profile photo updated'); }
     };
+
+    // PREMIUM BUTTON ROUTING FIX
+    const premiumBtnAction = document.getElementById('premium-btn-action');
+    if (premiumBtnAction) {
+        premiumBtnAction.onclick = () => {
+            if (window.currentUser && window.currentUser.isPremium) {
+                window.openAdvancedColorPicker(); // Directly open tick colors
+            } else {
+                window.openPremiumModal(); // Show UTR payment page
+            }
+        };
+    }
 
     const msgInput = document.getElementById('message-input'), sendBtn = document.getElementById('send-btn'), micBtn = document.getElementById('mic-btn');
     if(msgInput) {
