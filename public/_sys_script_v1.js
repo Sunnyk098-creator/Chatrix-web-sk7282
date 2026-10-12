@@ -50,7 +50,7 @@ let isDrawing = false;
 
 let messagesUnsub = null;
 let liveStatusUnsub = null;
-let typingStatusUnsub = null; // Typing Tracking
+let typingStatusUnsub = null; 
 
 window.targetChatMetaUnsub = null;
 window.isTargetUnread = true;
@@ -83,7 +83,6 @@ function decryptData(encodedText) {
             return str; 
         }
     }
-    // Fallback for older messages to prevent blank bubbles
     try { 
         return decodeURIComponent(atob(str)); 
     } catch(e) { 
@@ -166,7 +165,6 @@ window.closeUserProfile = function() {
     }
 };
 
-// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
 window.openUserProfileDirect = async function(uid) {
     if (!uid && window.activeChatUser) {
         uid = window.activeChatUserId || window.activeChatUser.targetUid;
@@ -186,7 +184,6 @@ window.openUserProfileDirect = async function(uid) {
     document.getElementById('overlay-profile-bio').textContent = u.bio || 'No bio available';
     document.getElementById('overlay-profile-birthday').textContent = u.birthday || 'Not Provided';
 
-    // Status mapping
     const statusEl = document.getElementById('overlay-profile-status-text');
     if (u.status && u.status.online) {
         statusEl.innerHTML = `<span class="text-emerald-500 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> online</span>`;
@@ -196,10 +193,7 @@ window.openUserProfileDirect = async function(uid) {
         statusEl.innerHTML = `<span class="text-gray-400 font-medium">offline</span>`;
     }
 
-    // Apply Premium Profile Customization Styles to Overlay
     applyProfileCoverStyle(u, 'overlay-profile');
-
-    // Load dynamic Tabs
     renderTargetProfilePosts(uid);
     populateContactMediaAndLinks();
     window.switchContactTab('posts');
@@ -208,7 +202,6 @@ window.openUserProfileDirect = async function(uid) {
     document.getElementById('user-profile-overlay').style.display = 'flex';
 };
 
-// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
 window.openChatHeaderTarget = function() {
     if (window.activeChatIsGroup) {
         window.openGroupDetailsModal(window.activeChatId);
@@ -333,7 +326,6 @@ window.viewStoryFullscreen = async (storyStr) => {
         replyBar.classList.add('hidden');
     } else {
         replyBar.classList.remove('hidden');
-        // Register view if not owner
         await set(ref(db, `${dbStoriesPath}/${s.id}/views/${window.currentUser.uid}`), true);
     }
 
@@ -475,7 +467,6 @@ async function autoLoginFromUrl(rawUser, pass) {
     const user = normalizeUsername(rawUser).replace(/[.#$\[\]]/g, '_');
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        // Verify with secure E2E logic
         if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid URL credentials");
         
         window.currentUser = snap.val();
@@ -484,7 +475,7 @@ async function autoLoginFromUrl(rawUser, pass) {
         window.history.replaceState({}, document.title, window.location.pathname);
         proceedToMainApp();
     } catch (err) {
-        alert("URL Login Failed: " + err.message);
+        window.showToast("URL Login Failed: " + err.message, "exclamation-circle", "text-red-400");
         window.history.replaceState({}, document.title, window.location.pathname);
         switchMainView('login-view');
         hideSplash();
@@ -540,7 +531,7 @@ function initApp() {
 }
 
 if (document.readyState === 'loading') {
-    window.addEventListenerDOMContentLoaded('DOMContentLoaded', initApp);
+    window.addEventListener('DOMContentLoaded', initApp);
 } else {
     initApp();
 }
@@ -670,11 +661,11 @@ window.submitBanAppeal = async (text) => {
             text: text,
             timestamp: Date.now()
         });
-        alert("Your appeal has been successfully submitted to the admin team for review.");
+        window.showToast("Appeal submitted successfully!", "check-circle", "text-green-400");
         document.getElementById('appeal-modal').classList.add('hidden');
         if(document.getElementById('appeal-text')) document.getElementById('appeal-text').value = '';
     } catch(e) {
-        alert("Error submitting appeal. Please try again.");
+        window.showToast("Error submitting appeal.", "exclamation-circle", "text-red-400");
     } finally {
         btn.innerText = originalText;
     }
@@ -698,7 +689,6 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
-            // Name ID mismatch safe bug fix logic
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -738,7 +728,6 @@ function listenToActiveChatsLive() {
                 isVerified = Boolean(u.isVerified || u.isPremium);
             }
             
-            // DECRYPT LAST MESSAGE PREVIEW IN LIST
             let displayLastMsg = decryptData(chatMeta.lastMessage) || 'Conversation started';
 
             list.push({
@@ -833,7 +822,7 @@ function openChat(chat) {
 
     if (liveStatusUnsub) liveStatusUnsub();
     if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
-    window.isTargetUnread = true; // reset seen logic
+    window.isTargetUnread = true; 
     
     if (isSelf) {
         if (statusEl) statusEl.textContent = 'Messages saved to your account';
@@ -842,12 +831,10 @@ function openChat(chat) {
     } else if (chat.isGroup) {
         if (statusEl) statusEl.textContent = 'Tap for group info';
     } else if (chat.targetUid) {
-        // Track Online & Typing Status
         liveStatusUnsub = onValue(ref(db, `${dbUsersPath}/${chat.targetUid}/status`), (snap) => {
             if (!statusEl) return;
             const s = snap.val();
             
-            // Check if typing to me
             if(s && s.typingTo === window.currentUser.uid) {
                  statusEl.innerHTML = `<span class="text-blue-500 font-bold italic animate-pulse">typing...</span>`;
             } else if (s && s.online) {
@@ -859,7 +846,6 @@ function openChat(chat) {
             }
         });
         
-        // Track Target's Unread Status for "Seen" Feature
         window.targetChatMetaUnsub = onValue(ref(db, `${dbUserChatsPath}/${chat.targetUid}/${chat.id}/unread`), (snap) => {
             window.isTargetUnread = snap.exists() ? snap.val() : true;
             renderMessagesUI();
@@ -882,13 +868,10 @@ if(msgInputEl) {
     msgInputEl.addEventListener('input', () => {
         if(!window.currentUser || !window.activeChatUserId || window.activeChatIsGroup) return;
         
-        // Send typing status
         set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), window.activeChatUserId);
         
-        // Clear old timeout
         if(typingTimeout) clearTimeout(typingTimeout);
         
-        // Set typing to null after 2.5s of inactivity
         typingTimeout = setTimeout(() => {
             set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null);
         }, 2500);
@@ -901,7 +884,6 @@ document.getElementById('back-from-chat').onclick = () => {
     if (typingStatusUnsub) typingStatusUnsub();
     if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
     
-    // Clear typing status on back
     if(window.currentUser) {
         set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null).catch(()=>{});
     }
@@ -972,21 +954,21 @@ async function updateChatMenuOptions() {
     }
 }
 
-window.clearChatHistoryAction = async () => {
-    if (confirm("Clear all messages in this conversation?")) {
+window.clearChatHistoryAction = () => {
+    window.appConfirm("Clear all messages in this conversation?", async () => {
         await remove(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`));
         await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${window.activeChatId}`), { lastMessage: encryptData('History cleared') });
         window.showToast("History cleared");
         document.getElementById('chat-menu-dropdown')?.classList.add('hidden');
-    }
+    });
 };
 
-window.deleteActiveChatAction = async () => {
-    if (confirm("Delete this conversation?")) {
+window.deleteActiveChatAction = () => {
+    window.appConfirm("Delete this conversation?", async () => {
         await remove(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${window.activeChatId}`));
         window.showToast("Chat deleted");
         document.getElementById('back-from-chat')?.click();
-    }
+    });
 };
 
 function loadLiveMessages(chatId) {
@@ -1025,7 +1007,6 @@ function renderMessagesUI() {
     const totalMsgs = currentChatMessages.length;
 
     currentChatMessages.forEach((m, index) => {
-        // Logics For Date Headers
         const mDate = new Date(m.timestamp || 0);
         const dateStr = mDate.toDateString();
         
@@ -1076,7 +1057,6 @@ function renderMessagesUI() {
                     <span class="text-[11px] font-bold">Voice Note</span>
                 </div>`;
         } else {
-            // DECRYPT MESSAGE TEXT HERE
             let rawText = decryptData(m.text);
             content = `<p class="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">${formatMessageTextWithMentionsAndLinks(rawText, isMe)}</p>`;
         }
@@ -1108,7 +1088,6 @@ function renderMessagesUI() {
 
         container.appendChild(div);
 
-        // Seen Indicator logic for individual Chat
         if (isLastMessage && isMe && !window.isTargetUnread && !window.activeChatIsGroup && window.activeChatUserId !== window.currentUser.uid && window.activeChatUserId !== OFFICIAL_SYSTEM_UID) {
             const seenDiv = document.createElement('div');
             seenDiv.className = 'w-full flex justify-end px-1 mt-0.5';
@@ -1155,7 +1134,7 @@ window.handleMentionClick = async (targetUsername) => {
         const snap = await get(child(ref(db), `${dbUsersPath}/${cleanUser}`));
         if (snap.exists()) { matchedUid = cleanUser; matchedUser = snap.val(); }
     }
-    if (!matchedUser) { alert("Username is invalid"); return; }
+    if (!matchedUser) { window.showToast("Username is invalid", "exclamation-circle", "text-red-400"); return; }
 
     const safeName = typeof matchedUser.name === 'string' ? matchedUser.name : (matchedUser.username || matchedUid);
     openDirectChatWithUser({
@@ -1186,7 +1165,6 @@ async function dispatchMessage(text, img = null, audio = null) {
     const now = Date.now();
     const timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
-    // ENCRYPT TEXT MESSAGE BEFORE SENDING
     let textToSend = text ? encryptData(text) : null;
 
     const msgPayload = {
@@ -1198,7 +1176,6 @@ async function dispatchMessage(text, img = null, audio = null) {
     window.cancelReply();
     await push(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`), msgPayload);
 
-    // Encrypt preview in chat list as well
     const previewRaw = text || (img ? 'Photo' : 'Voice note');
     const previewEncrypted = encryptData(previewRaw);
     
@@ -1385,7 +1362,6 @@ function populateUserData() {
     if (typeof window.renderMyProfilePosts === 'function') window.renderMyProfilePosts();
 }
 
-// Updated Dynamic Styling Logic for gradients and monochrome emojis
 function applyProfileCoverStyle(user, prefix) {
     const header = document.getElementById(`${prefix}-header-bg`);
     const pattern = document.getElementById(`${prefix}-pattern-layer`);
@@ -1397,7 +1373,6 @@ function applyProfileCoverStyle(user, prefix) {
         
         header.style.backgroundImage = cssGradient;
         
-        // Remove white bg classes and add transparent ones
         if(prefix === 'settings') {
              header.className = `flex flex-col items-center pt-4 pb-6 rounded-3xl transition-all duration-300 text-white shrink-0 border border-transparent relative overflow-hidden`;
         } else if(prefix === 'overlay-profile') {
@@ -1883,11 +1858,11 @@ window.pinSelectedChats = async () => {
     window.showToast('Updated pin status'); window.exitSelectionMode();
 };
 
-window.deleteSelectedChats = async () => {
-    if (confirm("Delete selected conversations?")) {
+window.deleteSelectedChats = () => {
+    window.appConfirm("Delete selected conversations?", async () => {
         for (let id of selectedChatIds) await remove(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${id}`));
         window.showToast('Chats deleted'); window.exitSelectionMode();
-    }
+    });
 };
 
 window.openGroupCreateModal = () => {
@@ -2147,7 +2122,12 @@ window.initiateReply = (msgId) => {
 };
 
 window.cancelReply = () => { currentReplyTarget = null; document.getElementById('reply-preview-bar')?.classList.add('hidden'); };
-window.deleteMessage = async (id) => { await remove(ref(db, `${dbChatsPath}/${window.activeChatId}/messages/${id}`)); window.showToast('Message deleted'); };
+window.deleteMessage = (id) => {
+    window.appConfirm("Delete this message?", async () => {
+        await remove(ref(db, `${dbChatsPath}/${window.activeChatId}/messages/${id}`));
+        window.showToast('Message deleted');
+    });
+};
 
 window.openChangePasswordModal = () => {
     const html = `
@@ -2190,8 +2170,14 @@ async function registerDeviceSession() {
     if (!sId) { sId = 'session_' + Date.now(); localStorage.setItem('chatrix_session_id', sId); }
     const dev = getDeviceLabel();
     await set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/sessions/${sId}`), { id: sId, deviceName: dev.label, isMobile: dev.isMobile, location: dev.tz, lastActive: Date.now() });
+    
+    let isInitialLoad = true;
     onValue(ref(db, `${dbUsersPath}/${window.currentUser.uid}/sessions/${sId}`), (snap) => {
-        if (!snap.exists() && window.currentUser) { window.showToast("Session terminated from another device", "exclamation-circle", "text-red-400"); setTimeout(() => window.handleLogout(), 1200); }
+        if (!isInitialLoad && !snap.exists() && window.currentUser) { 
+            window.showToast("Session terminated from another device", "exclamation-circle", "text-red-400"); 
+            setTimeout(() => window.handleLogout(), 1200); 
+        }
+        isInitialLoad = false;
     });
 }
 
@@ -2200,7 +2186,8 @@ window.openActiveDevicesModal = async () => {
     const sessions = snap.exists() ? snap.val() : {};
     let listHtml = '';
     for (let sId of Object.keys(sessions)) {
-        const s = sessions[sId], isThisCurrent = sId === localStorage.getItem('chatrix_session_id');
+        const s = sessions[sId];
+        const isThisCurrent = sId === localStorage.getItem('chatrix_session_id');
         listHtml += `
             <div class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl border border-gray-100 mb-2">
                 <div class="flex items-center gap-3">
@@ -2218,14 +2205,18 @@ window.openActiveDevicesModal = async () => {
         <div class="space-y-3">
             <h3 class="text-base font-bold text-gray-900">Active Devices & Sessions</h3>
             <p class="text-xs text-gray-400">Manage all devices logged into your account</p>
-            <div class="max-h-60 overflow-y-auto no-scrollbar">${listHtml || '<p class="text-xs text-gray-400 text-center py-4">No other active devices</p>'}</div>
+            <div class="max-h-60 overflow-y-auto no-scrollbar">${listHtml || '<p class="text-xs text-gray-400 text-center py-4">No active devices found</p>'}</div>
             <button onclick="window.closeModal(this)" class="w-full py-2.5 bg-gray-100 font-bold text-xs rounded-xl btn-press">Close</button>
         </div>
     `;
     renderModalHTML(html);
 };
 
-window.terminateSession = async (sId, btn) => { await remove(ref(db, `${dbUsersPath}/${window.currentUser.uid}/sessions/${sId}`)); window.showToast("Device session terminated"); window.openActiveDevicesModal(); };
+window.terminateSession = async (sId, btn) => { 
+    await remove(ref(db, `${dbUsersPath}/${window.currentUser.uid}/sessions/${sId}`)); 
+    window.showToast("Device session terminated"); 
+    window.openActiveDevicesModal(); 
+};
 
 // -------------------------------------------------------------
 // PROFILE MEDIA / LINKS LOADERS
@@ -2324,7 +2315,12 @@ window.publishStory = async () => {
     window.showToast("Story posted successfully!"); window.closeStoryEditor();
 };
 
-window.deleteStory = async (storyId) => { if(confirm("Delete this post?")) { await remove(ref(db, `${dbStoriesPath}/${storyId}`)); window.showToast("Post deleted"); } };
+window.deleteStory = (storyId) => { 
+    window.appConfirm("Delete this post?", async () => {
+        await remove(ref(db, `${dbStoriesPath}/${storyId}`)); 
+        window.showToast("Post deleted"); 
+    });
+};
 
 // -------------------------------------------------------------
 // DOM SETUP & LOGIN / SIGNUP LOGIC
@@ -2347,7 +2343,6 @@ function setupDomListeners() {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
                 const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
                 
-                // DECRYPT PASSWORD FOR CHECKING
                 if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
 
@@ -2389,7 +2384,6 @@ function setupDomListeners() {
                     }
                 }
 
-                // ENCRYPT PASSWORD BEFORE SAVING
                 const encPass = encryptData(pass);
                 const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
                 const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
@@ -2491,11 +2485,11 @@ function setupDomListeners() {
 
 window.handleLogout = () => { localStorage.removeItem('chatrix_user'); window.currentUser = null; switchMainView('login-view'); };
 
-window.confirmDeleteAccount = async () => {
-    if (confirm("Permanently delete your Chatrix account?")) {
+window.confirmDeleteAccount = () => {
+    window.appConfirm("Permanently delete your Chatrix account?", async () => {
         await remove(ref(db, `${dbUsersPath}/${window.currentUser.uid}`));
         window.handleLogout(); window.showToast('Account deleted');
-    }
+    });
 };
 
 window.switchTab = (tabId) => {
