@@ -143,6 +143,10 @@ body, html {
 .modal-enter { opacity: 0; pointer-events: none; }
 .modal-enter-active { opacity: 1; pointer-events: auto; transition: opacity 0.25s ease; }
 
+/* Custom In-App Alert Modal classes */
+.alert-modal-enter { opacity: 0; pointer-events: none; }
+.alert-modal-enter-active { opacity: 1; pointer-events: auto; transition: opacity 0.15s ease-out; }
+
 .draggable-text { touch-action: none; user-select: none; will-change: transform; cursor: grab; }
 .draggable-text:active { cursor: grabbing; }
 
