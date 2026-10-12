@@ -1756,7 +1756,7 @@ window.confirmCreateGroup = async (btn) => {
     window.exitSelectionMode(); window.closeModal(btn); window.showToast('Group created!');
 };
 
-
+// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
 window.openGroupDetailsModal = async function(groupId) {
     if (!groupId) groupId = window.activeChatId;
     const snap = await get(child(ref(db), `${dbGroupsPath}/${groupId}`));
@@ -2096,7 +2096,7 @@ async function populateContactMediaAndLinks() {
     if (linkCount === 0) linksList.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No links available.</div>';
 }
 
-// Fixed direct profile opening
+// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
 window.openUserProfileDirect = async function(uid) {
     if (!uid && window.activeChatUser) {
         uid = window.activeChatUserId || window.activeChatUser.targetUid;
@@ -2136,6 +2136,15 @@ window.openUserProfileDirect = async function(uid) {
 
     document.getElementById('user-profile-overlay').classList.remove('hidden');
     document.getElementById('user-profile-overlay').style.display = 'flex';
+};
+
+// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
+window.openChatHeaderTarget = function() {
+    if (window.activeChatIsGroup) {
+        window.openGroupDetailsModal(window.activeChatId);
+    } else {
+        window.openUserProfileDirect();
+    }
 };
 
 // -------------------------------------------------------------
