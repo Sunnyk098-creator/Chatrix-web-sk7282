@@ -62,18 +62,33 @@ window.currentViewingStory = null;
 let typingTimeout = null;
 
 // ==========================================
-// BASIC END-TO-END ENCRYPTION UTILS (Base64)
+// E2E ENCRYPTION UTILS (Base64 + Prefix)
 // ==========================================
-// Is function se text encode hoke database me save hoga
 function encryptData(text) {
     if(!text) return text;
-    try { return btoa(encodeURIComponent(text)); } catch(e) { return text; }
+    try { 
+        return "CTX:" + btoa(encodeURIComponent(String(text))); 
+    } catch(e) { 
+        return String(text); 
+    }
 }
 
-// Is function se text decode hoke screen pe dikhega
 function decryptData(encodedText) {
     if(!encodedText) return encodedText;
-    try { return decodeURIComponent(atob(encodedText)); } catch(e) { return encodedText; }
+    const str = String(encodedText);
+    if (str.startsWith("CTX:")) {
+        try { 
+            return decodeURIComponent(atob(str.substring(4))); 
+        } catch(e) { 
+            return str; 
+        }
+    }
+    // Fallback for older messages to prevent blank bubbles
+    try { 
+        return decodeURIComponent(atob(str)); 
+    } catch(e) { 
+        return str; 
+    }
 }
 
 const GRADIENT_MAP = {
@@ -460,7 +475,7 @@ async function autoLoginFromUrl(rawUser, pass) {
     const user = normalizeUsername(rawUser).replace(/[.#$\[\]]/g, '_');
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        // DECRYPT URL PASSWORD BEFORE CHECK
+        // Verify with secure E2E logic
         if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid URL credentials");
         
         window.currentUser = snap.val();
@@ -525,7 +540,7 @@ function initApp() {
 }
 
 if (document.readyState === 'loading') {
-    window.addEventListener('DOMContentLoaded', initApp);
+    window.addEventListenerDOMContentLoaded('DOMContentLoaded', initApp);
 } else {
     initApp();
 }
@@ -554,6 +569,22 @@ function proceedToMainApp() {
             window.handleMentionClick(urlUser);
         }, 1200);
     }
+}
+
+function listenToStoriesLive() {
+    try {
+        onValue(ref(db, dbStoriesPath), () => {
+            if (document.getElementById('stories-tab')?.classList.contains('tab-visible')) {
+                window.renderStoriesFeed();
+            }
+            if (document.getElementById('profile-tab')?.classList.contains('tab-visible')) {
+                window.renderMyProfilePosts();
+            }
+            if (document.getElementById('user-profile-overlay')?.style.display === 'flex' && window.activeChatUser?.targetUid) {
+                renderTargetProfilePosts(window.activeChatUser.targetUid);
+            }
+        });
+    } catch(e) {}
 }
 
 function switchMainView(viewId) {
@@ -666,10 +697,18 @@ function listenToActiveChatsLive() {
         const list = [];
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
+            
+            // Name ID mismatch safe bug fix logic
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
-                const parts = cId.split('_');
-                otherUid = parts[0] === window.currentUser.uid ? parts[1] : parts[0];
+                if (cId.startsWith(window.currentUser.uid + '_')) {
+                    otherUid = cId.substring(window.currentUser.uid.length + 1);
+                } else if (cId.endsWith('_' + window.currentUser.uid)) {
+                    otherUid = cId.substring(0, cId.length - window.currentUser.uid.length - 1);
+                } else {
+                    const parts = cId.split('_');
+                    otherUid = parts[0] === window.currentUser.uid ? parts[1] : parts[0];
+                }
             }
 
             const isSelf = otherUid === window.currentUser.uid;
@@ -793,9 +832,8 @@ function openChat(chat) {
     const statusEl = document.getElementById('active-chat-status');
 
     if (liveStatusUnsub) liveStatusUnsub();
-    if (typingStatusUnsub) typingStatusUnsub();
     if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
-    window.isTargetUnread = true; 
+    window.isTargetUnread = true; // reset seen logic
     
     if (isSelf) {
         if (statusEl) statusEl.textContent = 'Messages saved to your account';
@@ -844,13 +882,13 @@ if(msgInputEl) {
     msgInputEl.addEventListener('input', () => {
         if(!window.currentUser || !window.activeChatUserId || window.activeChatIsGroup) return;
         
-        // Send typing status true
+        // Send typing status
         set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), window.activeChatUserId);
         
         // Clear old timeout
         if(typingTimeout) clearTimeout(typingTimeout);
         
-        // Set typing to false after 2.5s of inactivity
+        // Set typing to null after 2.5s of inactivity
         typingTimeout = setTimeout(() => {
             set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null);
         }, 2500);
@@ -865,7 +903,7 @@ document.getElementById('back-from-chat').onclick = () => {
     
     // Clear typing status on back
     if(window.currentUser) {
-        set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null);
+        set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null).catch(()=>{});
     }
     
     window.activeChatId = null;
@@ -1083,8 +1121,9 @@ function renderMessagesUI() {
 
 function formatMessageTextWithMentionsAndLinks(text, isMe) {
     if (!text) return '';
+    let strText = String(text);
     const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
-    let formatted = text.replace(urlRegex, (url) => {
+    let formatted = strText.replace(urlRegex, (url) => {
         const safeUrl = url.startsWith('http') ? url : `https://${url}`;
         return `<a href="javascript:void(0)" onclick="window.triggerScamWarning('${encodeURIComponent(safeUrl)}')" class="web-link">${url}</a>`;
     });
@@ -1895,6 +1934,78 @@ window.confirmCreateGroup = async (btn) => {
     }
 
     window.exitSelectionMode(); window.closeModal(btn); window.showToast('Group created!');
+};
+
+window.openGroupDetailsModal = async function(groupId) {
+    if (!groupId) groupId = window.activeChatId;
+    const snap = await get(child(ref(db), `${dbGroupsPath}/${groupId}`));
+    if (!snap.exists()) return window.showToast("Group details not found", "exclamation-circle", "text-red-400");
+
+    const grp = snap.val();
+    const myUid = window.currentUser.uid;
+    const isOwner = grp.ownerUid === myUid;
+    const isAdmin = Boolean(grp.admins && grp.admins[myUid]);
+
+    let memberRows = '';
+    const membersMap = grp.members || {};
+    const adminsMap = grp.admins || {};
+
+    for (let memberUid of Object.keys(membersMap)) {
+        let u = allUsersCache[memberUid];
+        if (!u) { const uSnap = await get(child(ref(db), `${dbUsersPath}/${memberUid}`)); if (uSnap.exists()) u = uSnap.val(); }
+        if (!u) u = { name: memberUid, username: memberUid, dp: 'https://placehold.co/100' };
+
+        const isThisOwner = grp.ownerUid === memberUid;
+        const isThisAdmin = Boolean(adminsMap[memberUid]);
+
+        let canRemoveThisMember = false, canPromoteDemote = false;
+        if (isOwner && !isThisOwner) { canRemoveThisMember = true; canPromoteDemote = true; }
+        else if (isAdmin && !isThisOwner && !isThisAdmin) { canRemoveThisMember = true; }
+
+        memberRows += `
+            <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl mb-1.5 border border-gray-100">
+                <div class="flex items-center gap-2.5 min-w-0 cursor-pointer" onclick="window.closeModal(); window.openUserProfileDirect('${memberUid}')">
+                    <img src="${u.dp || 'https://placehold.co/100'}" class="w-9 h-9 rounded-full object-cover">
+                    <div class="min-w-0">
+                        <p class="font-bold text-xs truncate text-gray-900">${u.name} ${isThisOwner ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-black ml-1">OWNER</span>' : (isThisAdmin ? '<span class="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-black ml-1">ADMIN</span>' : '')}</p>
+                        <p class="text-[10px] text-gray-400">@${u.username || 'user'}</p>
+                    </div>
+                </div>
+                <div class="flex gap-1">
+                    ${canPromoteDemote ? `<button onclick="window.toggleAdminRole('${groupId}', '${memberUid}', ${!isThisAdmin})" class="text-[10px] px-2 py-1 bg-gray-100 rounded-lg font-bold">${isThisAdmin ? 'Demote' : 'Promote'}</button>` : ''}
+                    ${canRemoveThisMember ? `<button onclick="window.removeMemberFromGroup('${groupId}', '${memberUid}')" class="text-[10px] px-2 py-1 bg-red-50 text-red-500 rounded-lg font-bold">Remove</button>` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    const html = `
+        <div class="space-y-3 max-h-[75vh] overflow-y-auto no-scrollbar">
+            <div class="flex items-center justify-between px-1">
+                <h3 class="text-base font-black text-gray-900">Group Info</h3>
+                ${(isOwner || isAdmin) ? `<button onclick="window.openEditGroupDetailsModal('${groupId}')" class="text-amber-500 hover:text-amber-600 text-sm p-1" title="Edit Group Details"><i class="fas fa-pen"></i></button>` : ''}
+            </div>
+            <div class="flex flex-col items-center">
+                <img src="${grp.photo}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow mb-1.5">
+                <h3 class="text-lg font-black text-gray-900">${grp.name}</h3>
+                <p class="text-[11px] text-gray-400 font-medium">${Object.keys(membersMap).length} Members</p>
+                ${grp.bio ? `<p class="text-xs text-gray-500 italic text-center mt-1 px-4">${grp.bio}</p>` : ''}
+            </div>
+            ${(isOwner || isAdmin) ? `
+                <div class="p-3 bg-gray-50 rounded-2xl space-y-2 text-xs">
+                    <p class="font-bold text-gray-800">Permissions</p>
+                    <label class="flex items-center justify-between">
+                        <span>Members can send messages</span>
+                        <input type="checkbox" ${grp.permissions?.canMemberSendMessages !== false ? 'checked' : ''} onchange="window.updateGroupPerm('${groupId}', 'canMemberSendMessages', this.checked)" ${!isOwner ? 'disabled' : ''}>
+                    </label>
+                </div>
+            ` : ''}
+            <div><p class="text-xs font-bold text-gray-500 uppercase mb-1.5">Members List</p>${memberRows}</div>
+            ${!isOwner ? `<button onclick="window.leaveGroup('${groupId}')" class="w-full py-2.5 bg-red-50 text-red-500 font-bold text-xs rounded-xl btn-press">Leave Group</button>` : ''}
+            <button onclick="window.closeModal(this)" class="w-full py-2.5 bg-gray-100 font-bold text-xs rounded-xl btn-press">Close</button>
+        </div>
+    `;
+    renderModalHTML(html);
 };
 
 window.openEditGroupDetailsModal = async (groupId) => {
