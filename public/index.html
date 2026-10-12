@@ -22,14 +22,17 @@
                 'from-amber-400', 'to-orange-500',
                 'from-purple-500', 'to-pink-500',
                 'from-indigo-500', 'to-cyan-400',
-                'bg-gray-600'
+                'bg-gray-600',
+                /* Custom Premium Verification Tick Colors */
+                'text-blue-500', 'text-green-500', 'text-yellow-500', 
+                'text-purple-500', 'text-pink-500', 'text-rose-500', 
+                'text-orange-500', 'text-emerald-500'
             ],
             theme: { extend: {} }
         }
     </script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- LINK STYLE.CSS HIDDEN - INJECTED VIA JS SECURELY -->
 </head>
 <body class="bg-[#090d16]">
 
@@ -278,7 +281,7 @@
                                 <span class="text-[9px] bg-amber-100 text-amber-700 font-black px-2 py-0.5 rounded-full mr-2">VIP</span>
                                 <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
                             </button>
-                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" onclick="window.openPremiumModal()">
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" id="premium-btn-action">
                                 <div class="w-7 text-center text-blue-500 text-base"><i class="fas fa-star"></i></div>
                                 <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Chatrix Premium</span>
                                 <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
@@ -454,7 +457,7 @@
 
         <!-- CHAT SCREEN -->
         <div id="chat-screen" class="fixed inset-0 z-[100] hidden flex flex-col bg-white dark:bg-[#0f172a] h-[100dvh] max-h-[100dvh] overflow-hidden">
-            <div class="px-2 py-2 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 border-b border-gray-100 dark:border-white/5 z-10">
+            <div class="px-2 py-2 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 border-b border-gray-100 dark:border-white/5 z-20">
                 <button id="back-from-chat" class="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-900 dark:text-white mr-1 btn-press">
                     <i class="fas fa-arrow-left text-base"></i>
                 </button>
@@ -474,7 +477,14 @@
                 </div>
             </div>
 
-            <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar p-3.5 flex flex-col gap-2.5 chat-bg relative z-0" id="messages-container"></div>
+            <!-- E2E ENCRYPTION NOTICE -->
+            <div class="w-full flex justify-center pt-3 pb-1 shrink-0 bg-transparent z-10 relative">
+                <div class="bg-[#FFF8DD] dark:bg-yellow-900/20 text-[#856404] dark:text-yellow-500 text-[10px] font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm border border-[#FFEeba] dark:border-yellow-700/30 text-center max-w-[85%] mx-auto backdrop-blur-sm">
+                    <i class="fas fa-lock text-[9px]"></i> <span>Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.</span>
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3.5 pb-3.5 pt-1 flex flex-col gap-2.5 chat-bg relative z-0" id="messages-container"></div>
 
             <div id="reply-preview-bar" class="hidden px-4 py-1.5 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-white/10 flex items-center justify-between text-xs shrink-0">
                 <div class="flex items-center gap-2 border-l-2 border-blue-500 pl-2 min-w-0">
@@ -698,10 +708,25 @@
                             <button class="color-swatch w-7 h-7 rounded-full bg-gray-600" data-grad="" onclick="window.selectLiveColor(this)"></button>
                         </div>
 
+                        <!-- CUSTOM TICK COLOR SELECTION -->
+                        <div class="border-t border-gray-100 dark:border-white/10 pt-4" id="custom-tick-color-section">
+                            <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase">Custom Verified Tick Color</p>
+                            <div class="flex overflow-x-auto no-scrollbar gap-3 pb-1" id="tick-swatch-container">
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-blue-500')"><i class="fas fa-check-circle text-blue-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-green-500')"><i class="fas fa-check-circle text-green-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-yellow-500')"><i class="fas fa-check-circle text-yellow-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-purple-500')"><i class="fas fa-check-circle text-purple-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-pink-500')"><i class="fas fa-check-circle text-pink-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-emerald-500')"><i class="fas fa-check-circle text-emerald-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-rose-500')"><i class="fas fa-check-circle text-rose-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-orange-500')"><i class="fas fa-check-circle text-orange-500"></i></button>
+                            </div>
+                        </div>
+
                         <!-- ADD ICONS TO PROFILE TOGGLE MENU -->
                         <div class="border-t border-gray-100 dark:border-white/10 pt-4">
                             <div class="flex items-center justify-between cursor-pointer btn-press" onclick="document.getElementById('icon-selector-panel').classList.toggle('hidden')">
-                                <span class="text-[13px] font-bold text-gray-900 dark:text-white">Add Icons to Profile</span>
+                                <span class="text-[13px] font-bold text-gray-900 dark:text-white">Add Background Icons</span>
                                 <span class="text-[13px] font-bold text-blue-500 dark:text-blue-400" id="current-icon-status">Off</span>
                             </div>
                             
@@ -719,7 +744,7 @@
                             </div>
                         </div>
 
-                        <p class="text-[10px] text-gray-500 dark:text-gray-400 font-medium">You can change the color of your name and customize replies to you. <span class="text-blue-500 dark:text-blue-400">Change &gt;</span></p>
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-2">Personalize your Chatrix profile design. These colors are visible to everyone visiting your profile.</p>
                         <button onclick="window.resetAdvancedProfileColor()" class="w-full text-left font-bold text-[13px] text-gray-900 dark:text-white border-t border-gray-100 dark:border-white/10 pt-4">Reset Profile Color</button>
                     </div>
                 </div>
@@ -782,7 +807,7 @@
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">${message}</p>
                     <div class="flex gap-3">
                         <button class="flex-1 py-3.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs btn-press" onclick="this.closest('.fixed').remove()">Cancel</button>
-                        <button class="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs btn-press shadow-lg shadow-red-500/30" id="confirm-yes-btn">Yes, Delete</button>
+                        <button class="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs btn-press shadow-lg shadow-red-500/30" id="confirm-yes-btn">Yes, Execute</button>
                     </div>
                 </div>
             `;
