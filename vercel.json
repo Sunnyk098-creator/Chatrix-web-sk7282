@@ -1,0 +1,12 @@
+{
+  "rewrites": [
+    {
+      "source": "/script.js",
+      "destination": "/api/invalid"
+    },
+    {
+      "source": "/style.css",
+      "destination": "/api/invalid"
+    }
+  ]
+}
