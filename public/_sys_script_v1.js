@@ -8,7 +8,7 @@ import {
     serverTimestamp, onDisconnect 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-// SECURE FIREBASE INITIALIZATION FROM VERCEL API (Injected via HTML)
+// SECURE FIREBASE INITIALIZATION FROM VERCEL API
 const firebaseConfig = window.__FB_CFG || {};
 
 const app = initializeApp(firebaseConfig);
@@ -50,12 +50,31 @@ let isDrawing = false;
 
 let messagesUnsub = null;
 let liveStatusUnsub = null;
+let typingStatusUnsub = null; // Typing Tracking
+
 window.targetChatMetaUnsub = null;
 window.isTargetUnread = true;
 let currentChatMessages = [];
 
 let enterIsSend = localStorage.getItem('chatrix_enter_is_send') !== 'false';
 window.currentViewingStory = null; 
+
+let typingTimeout = null;
+
+// ==========================================
+// BASIC END-TO-END ENCRYPTION UTILS (Base64)
+// ==========================================
+// Is function se text encode hoke database me save hoga
+function encryptData(text) {
+    if(!text) return text;
+    try { return btoa(encodeURIComponent(text)); } catch(e) { return text; }
+}
+
+// Is function se text decode hoke screen pe dikhega
+function decryptData(encodedText) {
+    if(!encodedText) return encodedText;
+    try { return decodeURIComponent(atob(encodedText)); } catch(e) { return encodedText; }
+}
 
 const GRADIENT_MAP = {
     "from-blue-500 to-blue-600": "linear-gradient(to bottom, #3b82f6, #2563eb)",
@@ -87,6 +106,101 @@ function formatLastSeenTime(timestamp) {
     const timeStr = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     return isToday ? `at ${timeStr}` : `on ${d.toLocaleDateString([], { month: 'short', day: 'numeric' })} at ${timeStr}`;
 }
+
+// -------------------------------------------------------------
+// PROFILE / CONTACT TAB FIXES (from index.html to Window)
+// -------------------------------------------------------------
+
+window.switchContactTab = function(tab) {
+    const posts = document.getElementById('overlay-profile-posts-grid');
+    const media = document.getElementById('overlay-profile-media-grid');
+    const links = document.getElementById('overlay-profile-links-list');
+    const btnPosts = document.getElementById('tab-btn-posts');
+    const btnMedia = document.getElementById('tab-btn-media');
+    const btnLinks = document.getElementById('tab-btn-links');
+    
+    if(!posts || !media || !links) return;
+
+    posts.classList.add('hidden');
+    media.classList.add('hidden');
+    links.classList.add('hidden');
+    
+    [btnPosts, btnMedia, btnLinks].forEach(b => {
+        if(b) b.className = 'flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all';
+    });
+
+    if(tab === 'posts') {
+        posts.classList.remove('hidden');
+        if(btnPosts) btnPosts.className = 'flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all';
+    } else if(tab === 'media') {
+        media.classList.remove('hidden');
+        media.style.display = 'grid'; 
+        if(btnMedia) btnMedia.className = 'flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all';
+    } else if(tab === 'links') {
+        links.classList.remove('hidden');
+        links.style.display = 'flex';
+        if(btnLinks) btnLinks.className = 'flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all';
+    }
+};
+
+window.closeUserProfile = function() {
+    const overlay = document.getElementById('user-profile-overlay');
+    if(overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+    }
+};
+
+// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
+window.openUserProfileDirect = async function(uid) {
+    if (!uid && window.activeChatUser) {
+        uid = window.activeChatUserId || window.activeChatUser.targetUid;
+    }
+    if (!uid) return;
+
+    let u = allUsersCache[uid];
+    if (!u) {
+        const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
+        if (snap.exists()) u = snap.val();
+    }
+    if (!u) return window.showToast("User not found", "exclamation-circle", "text-red-400");
+
+    document.getElementById('overlay-profile-dp').src = u.dp || 'https://placehold.co/150';
+    document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${u.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-xs ml-1"></i>' : ''}`;
+    document.getElementById('overlay-profile-username').textContent = `@${u.username}`;
+    document.getElementById('overlay-profile-bio').textContent = u.bio || 'No bio available';
+    document.getElementById('overlay-profile-birthday').textContent = u.birthday || 'Not Provided';
+
+    // Status mapping
+    const statusEl = document.getElementById('overlay-profile-status-text');
+    if (u.status && u.status.online) {
+        statusEl.innerHTML = `<span class="text-emerald-500 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> online</span>`;
+    } else if (u.status && u.status.lastSeen) {
+        statusEl.innerHTML = `<span class="text-gray-400 font-medium">Last seen ${formatLastSeenTime(u.status.lastSeen)}</span>`;
+    } else {
+        statusEl.innerHTML = `<span class="text-gray-400 font-medium">offline</span>`;
+    }
+
+    // Apply Premium Profile Customization Styles to Overlay
+    applyProfileCoverStyle(u, 'overlay-profile');
+
+    // Load dynamic Tabs
+    renderTargetProfilePosts(uid);
+    populateContactMediaAndLinks();
+    window.switchContactTab('posts');
+
+    document.getElementById('user-profile-overlay').classList.remove('hidden');
+    document.getElementById('user-profile-overlay').style.display = 'flex';
+};
+
+// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
+window.openChatHeaderTarget = function() {
+    if (window.activeChatIsGroup) {
+        window.openGroupDetailsModal(window.activeChatId);
+    } else {
+        window.openUserProfileDirect();
+    }
+};
 
 // -------------------------------------------------------------
 // STORIES RENDERING & FULLSCREEN VIEWER
@@ -346,7 +460,8 @@ async function autoLoginFromUrl(rawUser, pass) {
     const user = normalizeUsername(rawUser).replace(/[.#$\[\]]/g, '_');
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        if (!snap.exists() || snap.val().password !== pass) throw new Error("Invalid URL credentials");
+        // DECRYPT URL PASSWORD BEFORE CHECK
+        if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid URL credentials");
         
         window.currentUser = snap.val();
         localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
@@ -441,22 +556,6 @@ function proceedToMainApp() {
     }
 }
 
-function listenToStoriesLive() {
-    try {
-        onValue(ref(db, dbStoriesPath), () => {
-            if (document.getElementById('stories-tab')?.classList.contains('tab-visible')) {
-                window.renderStoriesFeed();
-            }
-            if (document.getElementById('profile-tab')?.classList.contains('tab-visible')) {
-                window.renderMyProfilePosts();
-            }
-            if (document.getElementById('user-profile-overlay')?.style.display === 'flex' && window.activeChatUser?.targetUid) {
-                renderTargetProfilePosts(window.activeChatUser.targetUid);
-            }
-        });
-    } catch(e) {}
-}
-
 function switchMainView(viewId) {
     ['login-view', 'signup-view', 'main-app'].forEach(v => {
         const el = document.getElementById(v);
@@ -491,8 +590,8 @@ function listenToPresence() {
     onValue(connectedRef, (snap) => {
         if (snap.val() === true && window.currentUser) {
             const statusRef = ref(db, `${dbUsersPath}/${window.currentUser.uid}/status`);
-            onDisconnect(statusRef).set({ online: false, lastSeen: serverTimestamp() });
-            set(statusRef, { online: true });
+            onDisconnect(statusRef).set({ online: false, lastSeen: serverTimestamp(), typingTo: null });
+            set(statusRef, { online: true, typingTo: null });
         }
     });
 }
@@ -599,12 +698,15 @@ function listenToActiveChatsLive() {
                 dp = u.dp || `https://placehold.co/150/2563eb/ffffff?text=${name.charAt(0).toUpperCase()}`;
                 isVerified = Boolean(u.isVerified || u.isPremium);
             }
+            
+            // DECRYPT LAST MESSAGE PREVIEW IN LIST
+            let displayLastMsg = decryptData(chatMeta.lastMessage) || 'Conversation started';
 
             list.push({
                 id: cId, targetUid: otherUid || null, name: name || 'User', username: username || 'user',
                 dp: dp || 'https://placehold.co/150/2563eb/ffffff?text=U', isVerified: Boolean(isVerified),
                 isOfficial: isOfficial, isSelf: isSelf, isGroup: Boolean(chatMeta.isGroup),
-                lastMessage: chatMeta.lastMessage || 'Conversation started', timestamp: chatMeta.timestamp || 0,
+                lastMessage: displayLastMsg, timestamp: chatMeta.timestamp || 0,
                 time: chatMeta.timestamp ? new Date(chatMeta.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '',
                 unread: Boolean(chatMeta.unread), pinned: Boolean(chatMeta.pinned)
             });
@@ -691,8 +793,9 @@ function openChat(chat) {
     const statusEl = document.getElementById('active-chat-status');
 
     if (liveStatusUnsub) liveStatusUnsub();
+    if (typingStatusUnsub) typingStatusUnsub();
     if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
-    window.isTargetUnread = true; // reset seen logic
+    window.isTargetUnread = true; 
     
     if (isSelf) {
         if (statusEl) statusEl.textContent = 'Messages saved to your account';
@@ -701,11 +804,15 @@ function openChat(chat) {
     } else if (chat.isGroup) {
         if (statusEl) statusEl.textContent = 'Tap for group info';
     } else if (chat.targetUid) {
-        // Track Online Status
+        // Track Online & Typing Status
         liveStatusUnsub = onValue(ref(db, `${dbUsersPath}/${chat.targetUid}/status`), (snap) => {
             if (!statusEl) return;
             const s = snap.val();
-            if (s && s.online) {
+            
+            // Check if typing to me
+            if(s && s.typingTo === window.currentUser.uid) {
+                 statusEl.innerHTML = `<span class="text-blue-500 font-bold italic animate-pulse">typing...</span>`;
+            } else if (s && s.online) {
                 statusEl.innerHTML = `<span class="text-emerald-500 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> online</span>`;
             } else if (s && s.lastSeen) {
                 statusEl.innerHTML = `<span class="text-gray-400 font-medium">Last seen ${formatLastSeenTime(s.lastSeen)}</span>`;
@@ -731,10 +838,36 @@ function openChat(chat) {
     loadLiveMessages(chat.id);
 }
 
+// TYPING STATUS EVENT HANDLER
+const msgInputEl = document.getElementById('message-input');
+if(msgInputEl) {
+    msgInputEl.addEventListener('input', () => {
+        if(!window.currentUser || !window.activeChatUserId || window.activeChatIsGroup) return;
+        
+        // Send typing status true
+        set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), window.activeChatUserId);
+        
+        // Clear old timeout
+        if(typingTimeout) clearTimeout(typingTimeout);
+        
+        // Set typing to false after 2.5s of inactivity
+        typingTimeout = setTimeout(() => {
+            set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null);
+        }, 2500);
+    });
+}
+
 document.getElementById('back-from-chat').onclick = () => {
     if (messagesUnsub) messagesUnsub();
     if (liveStatusUnsub) liveStatusUnsub();
+    if (typingStatusUnsub) typingStatusUnsub();
     if (window.targetChatMetaUnsub) window.targetChatMetaUnsub();
+    
+    // Clear typing status on back
+    if(window.currentUser) {
+        set(ref(db, `${dbUsersPath}/${window.currentUser.uid}/status/typingTo`), null);
+    }
+    
     window.activeChatId = null;
     window.activeChatUserId = null;
     window.activeChatUser = null;
@@ -804,7 +937,7 @@ async function updateChatMenuOptions() {
 window.clearChatHistoryAction = async () => {
     if (confirm("Clear all messages in this conversation?")) {
         await remove(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`));
-        await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${window.activeChatId}`), { lastMessage: 'History cleared' });
+        await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${window.activeChatId}`), { lastMessage: encryptData('History cleared') });
         window.showToast("History cleared");
         document.getElementById('chat-menu-dropdown')?.classList.add('hidden');
     }
@@ -905,7 +1038,9 @@ function renderMessagesUI() {
                     <span class="text-[11px] font-bold">Voice Note</span>
                 </div>`;
         } else {
-            content = `<p class="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">${formatMessageTextWithMentionsAndLinks(m.text, isMe)}</p>`;
+            // DECRYPT MESSAGE TEXT HERE
+            let rawText = decryptData(m.text);
+            content = `<p class="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">${formatMessageTextWithMentionsAndLinks(rawText, isMe)}</p>`;
         }
 
         const timeStr = m.time || (m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
@@ -938,7 +1073,7 @@ function renderMessagesUI() {
         // Seen Indicator logic for individual Chat
         if (isLastMessage && isMe && !window.isTargetUnread && !window.activeChatIsGroup && window.activeChatUserId !== window.currentUser.uid && window.activeChatUserId !== OFFICIAL_SYSTEM_UID) {
             const seenDiv = document.createElement('div');
-            seenDiv.className = 'w-full flex justify-end px-1';
+            seenDiv.className = 'w-full flex justify-end px-1 mt-0.5';
             seenDiv.innerHTML = `<span class="msg-seen-status">Seen <i class="fas fa-check-double text-blue-500 ml-0.5"></i></span>`;
             container.appendChild(seenDiv);
         }
@@ -1011,24 +1146,30 @@ async function dispatchMessage(text, img = null, audio = null) {
 
     const now = Date.now();
     const timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    
+    // ENCRYPT TEXT MESSAGE BEFORE SENDING
+    let textToSend = text ? encryptData(text) : null;
 
     const msgPayload = {
         senderId: window.currentUser.uid, type: img ? 'image' : (audio ? 'audio' : 'text'),
-        text: text || null, imageUrl: img || null, audioUrl: audio || null,
+        text: textToSend, imageUrl: img || null, audioUrl: audio || null,
         timestamp: now, time: timeStr, replyTo: currentReplyTarget
     };
 
     window.cancelReply();
     await push(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`), msgPayload);
 
-    const preview = text || (img ? 'Photo' : 'Voice note');
+    // Encrypt preview in chat list as well
+    const previewRaw = text || (img ? 'Photo' : 'Voice note');
+    const previewEncrypted = encryptData(previewRaw);
+    
     const isSelf = window.activeChatUserId === window.currentUser.uid;
     
     await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${window.activeChatId}`), {
         id: window.activeChatId, targetUid: window.activeChatUserId,
         name: isSelf ? 'Saved Messages' : window.activeChatUser.name, username: window.activeChatUser.username,
         dp: window.activeChatUser.dp, isGroup: Boolean(window.activeChatIsGroup),
-        lastMessage: preview, timestamp: now, unread: false
+        lastMessage: previewEncrypted, timestamp: now, unread: false
     });
 
     if (!isSelf && window.activeChatUserId && window.activeChatUserId !== OFFICIAL_SYSTEM_UID) {
@@ -1036,7 +1177,7 @@ async function dispatchMessage(text, img = null, audio = null) {
             id: window.activeChatId, targetUid: window.currentUser.uid,
             name: window.currentUser.name, username: window.currentUser.username,
             dp: window.currentUser.dp, isVerified: Boolean(window.currentUser.isVerified || window.currentUser.isPremium),
-            lastMessage: preview, timestamp: now, unread: true
+            lastMessage: previewEncrypted, timestamp: now, unread: true
         });
     }
 }
@@ -1486,14 +1627,14 @@ window.submitPremiumUtr = async (btn) => {
 
     await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), {
         senderId: OFFICIAL_SYSTEM_UID,
-        text: `Premium Request Received! 🌟\n\nUTR: ${utr}\nAmount: ₹30\n\nYour request has been sent to the admin for verification. If approved, your account will be upgraded to Premium. We will alert you here upon approval or rejection.`,
+        text: encryptData(`Premium Request Received! 🌟\n\nUTR: ${utr}\nAmount: ₹30\n\nYour request has been sent to the admin for verification. If approved, your account will be upgraded to Premium. We will alert you here upon approval or rejection.`),
         timestamp: now, time: timeStr
     });
 
     await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${welcomeId}`), {
         id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official',
         dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true,
-        lastMessage: `Premium request received (UTR: ${utr})`, timestamp: now, unread: true
+        lastMessage: encryptData(`Premium request received (UTR: ${utr})`), timestamp: now, unread: true
     });
 
     window.showToast("Request submitted for review!");
@@ -1749,84 +1890,11 @@ window.confirmCreateGroup = async (btn) => {
     for (let uid of membersList) {
         await update(ref(db, `${dbUserChatsPath}/${uid}/${groupId}`), {
             id: groupId, name, dp: groupPayload.photo, isGroup: true,
-            lastMessage: `${window.currentUser.name} created the group`, timestamp: now, unread: uid !== window.currentUser.uid
+            lastMessage: encryptData(`${window.currentUser.name} created the group`), timestamp: now, unread: uid !== window.currentUser.uid
         });
     }
 
     window.exitSelectionMode(); window.closeModal(btn); window.showToast('Group created!');
-};
-
-// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
-window.openGroupDetailsModal = async function(groupId) {
-    if (!groupId) groupId = window.activeChatId;
-    const snap = await get(child(ref(db), `${dbGroupsPath}/${groupId}`));
-    if (!snap.exists()) return window.showToast("Group details not found", "exclamation-circle", "text-red-400");
-
-    const grp = snap.val();
-    const myUid = window.currentUser.uid;
-    const isOwner = grp.ownerUid === myUid;
-    const isAdmin = Boolean(grp.admins && grp.admins[myUid]);
-
-    let memberRows = '';
-    const membersMap = grp.members || {};
-    const adminsMap = grp.admins || {};
-
-    for (let memberUid of Object.keys(membersMap)) {
-        let u = allUsersCache[memberUid];
-        if (!u) { const uSnap = await get(child(ref(db), `${dbUsersPath}/${memberUid}`)); if (uSnap.exists()) u = uSnap.val(); }
-        if (!u) u = { name: memberUid, username: memberUid, dp: 'https://placehold.co/100' };
-
-        const isThisOwner = grp.ownerUid === memberUid;
-        const isThisAdmin = Boolean(adminsMap[memberUid]);
-
-        let canRemoveThisMember = false, canPromoteDemote = false;
-        if (isOwner && !isThisOwner) { canRemoveThisMember = true; canPromoteDemote = true; }
-        else if (isAdmin && !isThisOwner && !isThisAdmin) { canRemoveThisMember = true; }
-
-        memberRows += `
-            <div class="flex items-center justify-between p-2.5 bg-gray-50 rounded-xl mb-1.5 border border-gray-100">
-                <div class="flex items-center gap-2.5 min-w-0 cursor-pointer" onclick="window.closeModal(); window.openUserProfileDirect('${memberUid}')">
-                    <img src="${u.dp || 'https://placehold.co/100'}" class="w-9 h-9 rounded-full object-cover">
-                    <div class="min-w-0">
-                        <p class="font-bold text-xs truncate text-gray-900">${u.name} ${isThisOwner ? '<span class="text-[9px] bg-amber-100 text-amber-700 px-1 py-0.5 rounded font-black ml-1">OWNER</span>' : (isThisAdmin ? '<span class="text-[9px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded font-black ml-1">ADMIN</span>' : '')}</p>
-                        <p class="text-[10px] text-gray-400">@${u.username || 'user'}</p>
-                    </div>
-                </div>
-                <div class="flex gap-1">
-                    ${canPromoteDemote ? `<button onclick="window.toggleAdminRole('${groupId}', '${memberUid}', ${!isThisAdmin})" class="text-[10px] px-2 py-1 bg-gray-100 rounded-lg font-bold">${isThisAdmin ? 'Demote' : 'Promote'}</button>` : ''}
-                    ${canRemoveThisMember ? `<button onclick="window.removeMemberFromGroup('${groupId}', '${memberUid}')" class="text-[10px] px-2 py-1 bg-red-50 text-red-500 rounded-lg font-bold">Remove</button>` : ''}
-                </div>
-            </div>
-        `;
-    }
-
-    const html = `
-        <div class="space-y-3 max-h-[75vh] overflow-y-auto no-scrollbar">
-            <div class="flex items-center justify-between px-1">
-                <h3 class="text-base font-black text-gray-900">Group Info</h3>
-                ${(isOwner || isAdmin) ? `<button onclick="window.openEditGroupDetailsModal('${groupId}')" class="text-amber-500 hover:text-amber-600 text-sm p-1" title="Edit Group Details"><i class="fas fa-pen"></i></button>` : ''}
-            </div>
-            <div class="flex flex-col items-center">
-                <img src="${grp.photo}" class="w-16 h-16 rounded-full object-cover border-2 border-white shadow mb-1.5">
-                <h3 class="text-lg font-black text-gray-900">${grp.name}</h3>
-                <p class="text-[11px] text-gray-400 font-medium">${Object.keys(membersMap).length} Members</p>
-                ${grp.bio ? `<p class="text-xs text-gray-500 italic text-center mt-1 px-4">${grp.bio}</p>` : ''}
-            </div>
-            ${(isOwner || isAdmin) ? `
-                <div class="p-3 bg-gray-50 rounded-2xl space-y-2 text-xs">
-                    <p class="font-bold text-gray-800">Permissions</p>
-                    <label class="flex items-center justify-between">
-                        <span>Members can send messages</span>
-                        <input type="checkbox" ${grp.permissions?.canMemberSendMessages !== false ? 'checked' : ''} onchange="window.updateGroupPerm('${groupId}', 'canMemberSendMessages', this.checked)" ${!isOwner ? 'disabled' : ''}>
-                    </label>
-                </div>
-            ` : ''}
-            <div><p class="text-xs font-bold text-gray-500 uppercase mb-1.5">Members List</p>${memberRows}</div>
-            ${!isOwner ? `<button onclick="window.leaveGroup('${groupId}')" class="w-full py-2.5 bg-red-50 text-red-500 font-bold text-xs rounded-xl btn-press">Leave Group</button>` : ''}
-            <button onclick="window.closeModal(this)" class="w-full py-2.5 bg-gray-100 font-bold text-xs rounded-xl btn-press">Close</button>
-        </div>
-    `;
-    renderModalHTML(html);
 };
 
 window.openEditGroupDetailsModal = async (groupId) => {
@@ -1904,13 +1972,18 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
+        // Data is already encrypted in DB, copy as is for forward
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
-        const preview = m.text || (m.imageUrl ? 'Photo' : 'Voice note');
-        await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${targetChatId}`), { lastMessage: `Forwarded: ${preview}`, timestamp: now, unread: false });
+        
+        const rawPreview = decryptData(m.text);
+        const preview = rawPreview || (m.imageUrl ? 'Photo' : 'Voice note');
+        
+        await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${targetChatId}`), { lastMessage: encryptData(`Forwarded: ${preview}`), timestamp: now, unread: false });
+        
         const targetChat = activeChatsList.find(x => x.id === targetChatId);
         if (targetChat && !targetChat.isGroup && targetChat.targetUid && targetChat.targetUid !== OFFICIAL_SYSTEM_UID && targetChat.targetUid !== window.currentUser.uid) {
-            await update(ref(db, `${dbUserChatsPath}/${targetChat.targetUid}/${targetChatId}`), { id: targetChatId, targetUid: window.currentUser.uid, name: window.currentUser.name, username: window.currentUser.username, dp: window.currentUser.dp, isVerified: Boolean(window.currentUser.isVerified || window.currentUser.isPremium), lastMessage: `Forwarded: ${preview}`, timestamp: now, unread: true });
+            await update(ref(db, `${dbUserChatsPath}/${targetChat.targetUid}/${targetChatId}`), { id: targetChatId, targetUid: window.currentUser.uid, name: window.currentUser.name, username: window.currentUser.username, dp: window.currentUser.dp, isVerified: Boolean(window.currentUser.isVerified || window.currentUser.isPremium), lastMessage: encryptData(`Forwarded: ${preview}`), timestamp: now, unread: true });
         }
     }
     window.showToast('Message forwarded successfully!'); window.closeModal(btn);
@@ -1923,8 +1996,9 @@ function showMessageActionModal(msg, isMe) {
             <button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left" onclick="window.closeModal(this); window.openForwardModal('${msg.id}')"><i class="fas fa-share w-6 text-indigo-500"></i> Forward</button>
     `;
     if (msg.type === 'text') {
-        html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left" onclick="window.copyToClipboard('${(msg.text || '').replace(/'/g, "\\'")}'); window.closeModal(this)"><i class="fas fa-copy w-6 text-emerald-500"></i> Copy Text</button>`;
-        if (isMe) html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left text-green-600" onclick="window.closeModal(this); window.promptEditMessage('${msg.id}', '${(msg.text || '').replace(/'/g, "\\'")}');"><i class="fas fa-edit w-6 text-green-500"></i> Edit Message</button>`;
+        const rawText = decryptData(msg.text || '').replace(/'/g, "\\'");
+        html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left" onclick="window.copyToClipboard('${rawText}'); window.closeModal(this)"><i class="fas fa-copy w-6 text-emerald-500"></i> Copy Text</button>`;
+        if (isMe) html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left text-green-600" onclick="window.closeModal(this); window.promptEditMessage('${msg.id}', '${rawText}');"><i class="fas fa-edit w-6 text-green-500"></i> Edit Message</button>`;
     }
     if (msg.type === 'image' && msg.imageUrl) { html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-gray-50 text-xs font-semibold btn-press text-left text-blue-600" onclick="window.downloadChatImage('${msg.imageUrl}'); window.closeModal(this)"><i class="fas fa-download w-6 text-blue-500"></i> Download Image</button>`; }
     if (isMe) { html += `<button class="w-full flex items-center p-3 rounded-2xl hover:bg-red-50 text-red-500 text-xs font-semibold btn-press text-left" onclick="window.deleteMessage('${msg.id}'); window.closeModal(this)"><i class="fas fa-trash-alt w-6"></i> Delete Message</button>`; }
@@ -1946,7 +2020,7 @@ window.promptEditMessage = (msgId, currentText) => {
 window.saveEditedMessage = async (msgId, btn) => {
     const newText = btn.closest('.bg-white').querySelector('#edit-msg-input').value.trim();
     if (!newText) return;
-    await update(ref(db, `${dbChatsPath}/${window.activeChatId}/messages/${msgId}`), { text: newText, edited: true });
+    await update(ref(db, `${dbChatsPath}/${window.activeChatId}/messages/${msgId}`), { text: encryptData(newText), edited: true });
     window.showToast("Message edited"); window.closeModal(btn);
 };
 
@@ -1982,9 +2056,10 @@ window.openChangePasswordModal = () => {
 window.saveNewPassword = async (btn) => {
     const modal = btn.closest('.bg-white'), cur = modal.querySelector('#current-pass-inp').value, next = modal.querySelector('#new-pass-inp').value;
     if (!cur || !next) return window.showToast("All fields required", "exclamation-circle", "text-red-400");
-    if (window.currentUser.password !== cur) return window.showToast("Current password incorrect", "exclamation-circle", "text-red-400");
-    await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { password: next });
-    window.currentUser.password = next; localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+    if (decryptData(window.currentUser.password) !== cur) return window.showToast("Current password incorrect", "exclamation-circle", "text-red-400");
+    const encPass = encryptData(next);
+    await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { password: encPass });
+    window.currentUser.password = encPass; localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
     window.showToast("Password updated!"); window.closeModal(btn);
 };
 
@@ -2077,7 +2152,8 @@ async function populateContactMediaAndLinks() {
             mediaCount++;
         }
         if (m.type === 'text' && m.text) {
-            const links = m.text.match(urlRegex);
+            const rawText = decryptData(m.text);
+            const links = rawText.match(urlRegex);
             if (links) {
                 links.forEach(link => {
                     linksList.innerHTML += `
@@ -2095,61 +2171,6 @@ async function populateContactMediaAndLinks() {
     if (mediaCount === 0) mediaGrid.innerHTML = '<div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>';
     if (linkCount === 0) linksList.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No links available.</div>';
 }
-
-// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
-window.openUserProfileDirect = async function(uid) {
-    if (!uid && window.activeChatUser) {
-        uid = window.activeChatUserId || window.activeChatUser.targetUid;
-    }
-    if (!uid) return;
-
-    let u = allUsersCache[uid];
-    if (!u) {
-        const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
-        if (snap.exists()) u = snap.val();
-    }
-    if (!u) return window.showToast("User not found", "exclamation-circle", "text-red-400");
-
-    document.getElementById('overlay-profile-dp').src = u.dp || 'https://placehold.co/150';
-    document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${u.isVerified ? '<i class="fas fa-check-circle text-blue-500 text-xs ml-1"></i>' : ''}`;
-    document.getElementById('overlay-profile-username').textContent = `@${u.username}`;
-    document.getElementById('overlay-profile-bio').textContent = u.bio || 'No bio available';
-    document.getElementById('overlay-profile-birthday').textContent = u.birthday || 'Not Provided';
-
-    // Status mapping
-    const statusEl = document.getElementById('overlay-profile-status-text');
-    if (u.status && u.status.online) {
-        statusEl.innerHTML = `<span class="text-emerald-500 font-bold flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> online</span>`;
-    } else if (u.status && u.status.lastSeen) {
-        statusEl.innerHTML = `<span class="text-gray-400 font-medium">Last seen ${formatLastSeenTime(u.status.lastSeen)}</span>`;
-    } else {
-        statusEl.innerHTML = `<span class="text-gray-400 font-medium">offline</span>`;
-    }
-
-    // Apply Premium Profile Customization Styles to Overlay
-    applyProfileCoverStyle(u, 'overlay-profile');
-
-    // Load dynamic Tabs
-    renderTargetProfilePosts(uid);
-    populateContactMediaAndLinks();
-    window.switchContactTab('posts');
-
-    document.getElementById('user-profile-overlay').classList.remove('hidden');
-    document.getElementById('user-profile-overlay').style.display = 'flex';
-};
-
-// DIRECTLY BOUND TO WINDOW FOR HTML ONCLICK ACCESS
-window.openChatHeaderTarget = function() {
-    if (window.activeChatIsGroup) {
-        window.openGroupDetailsModal(window.activeChatId);
-    } else {
-        window.openUserProfileDirect();
-    }
-};
-
-// -------------------------------------------------------------
-// STORY CREATION EDITOR
-// -------------------------------------------------------------
 
 window.openStoryEditor = () => { document.getElementById('story-editor-overlay')?.classList.remove('hidden'); };
 
@@ -2214,12 +2235,14 @@ function setupDomListeners() {
             try {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
                 const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-                if (!snap.exists() || snap.val().password !== pass) throw new Error("Invalid username or password.");
+                
+                // DECRYPT PASSWORD FOR CHECKING
+                if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: `Security Alert: New login detected for your Chatrix account at ${timeStr}. Device: ${getDeviceLabel().label}.`, timestamp: now, time: timeStr });
-                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: `Security Alert: New login detected at ${timeStr}`, timestamp: now, unread: true });
+                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: encryptData(`Security Alert: New login detected for your Chatrix account at ${timeStr}. Device: ${getDeviceLabel().label}.`), timestamp: now, time: timeStr });
+                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: encryptData(`Security Alert: New login detected at ${timeStr}`), timestamp: now, unread: true });
                 
                 window.history.replaceState({}, document.title, window.location.pathname);
                 proceedToMainApp();
@@ -2255,13 +2278,15 @@ function setupDomListeners() {
                     }
                 }
 
+                // ENCRYPT PASSWORD BEFORE SAVING
+                const encPass = encryptData(pass);
                 const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
-                const newUser = { uid: user, name, username: rawUser, password: pass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
+                const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
                 await set(ref(db, `${dbUsersPath}/${user}`), newUser);
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now();
-                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: 'Welcome to Chatrix! Connect with @ChatrixSupport for help.', timestamp: now, time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
-                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: 'Welcome to Chatrix!', timestamp: now, unread: true });
+                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: encryptData('Welcome to Chatrix! Connect with @ChatrixSupport for help.'), timestamp: now, time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: encryptData('Welcome to Chatrix!'), timestamp: now, unread: true });
 
                 window.currentUser = newUser; localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
                 window.history.replaceState({}, document.title, window.location.pathname);
