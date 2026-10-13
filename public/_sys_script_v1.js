@@ -89,11 +89,8 @@ function decryptData(encodedText) {
             return str; 
         }
     }
-    try { 
-        return decodeURIComponent(atob(str)); 
-    } catch(e) { 
-        return str; 
-    }
+    // Fallback if not encrypted with prefix
+    return str;
 }
 
 const GRADIENT_MAP = {
@@ -473,20 +470,18 @@ function hideSplash() {
     }
 }
 
-// ANTI-SPAM LOGIC
 let lastRefreshTime = localStorage.getItem('ctx_last_refresh') || 0;
 let refreshCount = localStorage.getItem('ctx_refresh_count') || 0;
 let banUntil = localStorage.getItem('ctx_ban_until') || 0;
 
 function checkRateLimit() {
     const now = Date.now();
-    if(now < banUntil) return true; // Still banned
+    if(now < banUntil) return true;
     
-    if(now - lastRefreshTime < 10000) { // 10 sec window
+    if(now - lastRefreshTime < 10000) { 
         refreshCount++;
         localStorage.setItem('ctx_refresh_count', refreshCount);
         if(refreshCount > 6) {
-            // 2 Hour Ban
             banUntil = now + (2 * 60 * 60 * 1000);
             localStorage.setItem('ctx_ban_until', banUntil);
             return true;
@@ -540,7 +535,7 @@ function showBanScreen(userObj = null, isSpam = false, spamTime = 0) {
     if(isSpam) {
         title.innerText = "Temporary Rate Limit Ban";
         reason.innerText = "You have been temporarily blocked for sending too many automated requests or refreshing rapidly. Please wait for the timer to expire.";
-        if(btn) btn.classList.add('hidden'); // No appeal for spam timeout
+        if(btn) btn.classList.add('hidden'); 
         window.startBanCountdown(spamTime);
     } else {
         title.innerText = "This account can no longer use Chatrix";
@@ -560,7 +555,9 @@ async function autoLoginFromUrl(rawUser, pass) {
     const user = normalizeUsername(rawUser);
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid URL credentials");
+        // FIX: Decrypt logic adjusted
+        const storedPass = snap.val().password;
+        if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) throw new Error("Invalid URL credentials");
         
         window.currentUser = snap.val();
         localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
@@ -634,7 +631,6 @@ if (document.readyState === 'loading') {
 setTimeout(() => { hideSplash(); }, 2500);
 
 function proceedToMainApp() {
-    // If banned by admin
     if (window.currentUser && window.currentUser.isBanned) {
         return showBanScreen(window.currentUser, false, 0);
     }
@@ -727,10 +723,9 @@ function listenToUsersLive() {
                 
                 if(window.currentUser.isBanned) {
                     showBanScreen(window.currentUser, false, 0);
-                    // Kill other listeners so data isn't fetched while banned
                     if(messagesUnsub) messagesUnsub();
                     if(liveStatusUnsub) liveStatusUnsub();
-                    if(targetChatMetaUnsub) targetChatMetaUnsub();
+                    if(window.targetChatMetaUnsub) window.targetChatMetaUnsub();
                 } else {
                     const banOverlay = document.getElementById('banned-overlay');
                     if(banOverlay) {
@@ -776,7 +771,7 @@ function listenToActiveChatsLive() {
     if (!window.currentUser?.uid) return;
     const myChatsRef = ref(db, `${dbUserChatsPath}/${window.currentUser.uid}`);
     onValue(myChatsRef, async (snapshot) => {
-        if(window.currentUser?.isBanned) return; // Block fetch
+        if(window.currentUser?.isBanned) return; 
         
         const data = snapshot.val();
         if (!data) {
@@ -789,7 +784,6 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
-            // STRICT ID Extraction Bug Fix
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -1086,7 +1080,7 @@ function loadLiveMessages(chatId) {
     if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
 
     messagesUnsub = onValue(ref(db, `${dbChatsPath}/${chatId}/messages`), (snapshot) => {
-        if(window.activeChatId !== chatId) return; // double check
+        if(window.activeChatId !== chatId) return; 
 
         const data = snapshot.val();
         if (!data) {
@@ -1375,7 +1369,6 @@ window.createStickerPack = async (btn) => {
         createdAt: Date.now(), stickers: []
     });
     
-    // Add to my installed packs
     let installed = window.currentUser.installedPacks || {};
     installed[packId] = true;
     await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { installedPacks: installed });
@@ -1436,7 +1429,7 @@ async function loadExploreStickerPacks() {
     Object.keys(allPacks).forEach(packId => {
         const p = allPacks[packId];
         const scount = p.stickers ? Object.keys(p.stickers).length : 0;
-        if(scount === 0) return; // Hide empty packs from explore
+        if(scount === 0) return; 
 
         const isInstalled = myInstalled[packId] === true;
         const previewImg = Object.values(p.stickers)[0];
@@ -1531,7 +1524,7 @@ window.deleteSingleSticker = (packId, sId) => {
         await remove(ref(db, `${dbStickerPacksPath}/${packId}/stickers/${sId}`));
         stickerPacksCache[packId].stickers[sId] = null;
         delete stickerPacksCache[packId].stickers[sId];
-        window.openSinglePackView(packId); // refresh
+        window.openSinglePackView(packId); 
     });
 };
 
@@ -1578,7 +1571,6 @@ window.addSMText = () => {
     }
 };
 
-// STRICT 5MB LIMIT & GIF ALLOWED LOGIC FOR IMPORT
 const smImgInput = document.getElementById('sm-image-upload');
 if(smImgInput) {
     smImgInput.onchange = (e) => {
@@ -1601,7 +1593,6 @@ if(smImgInput) {
     };
 }
 
-// Drawing Logic
 const cvs2 = document.getElementById('sticker-draw-canvas');
 if (cvs2) {
     const draw2 = (e) => {
@@ -1620,18 +1611,15 @@ if (cvs2) {
 }
 
 window.saveCreatedSticker = async () => {
-    // Render text to canvas before save
     const txtEl = document.getElementById('sm-text-preview');
     if(txtEl && txtEl.innerText) {
         smCtx.font = "bold 60px Inter";
         smCtx.fillStyle = document.getElementById('sm-color-picker')?.value || "#000";
         smCtx.textAlign = "center";
         smCtx.textBaseline = "middle";
-        // Simple center projection
         smCtx.fillText(txtEl.innerText, smCanvas.width/2, smCanvas.height/2);
     }
     
-    // Transparent PNG export
     const b64 = smCanvas.toDataURL('image/png', 0.8);
     const sid = 's_' + Date.now();
     await set(ref(db, `${dbStickerPacksPath}/${currentActivePackId}/stickers/${sid}`), b64);
@@ -1641,7 +1629,7 @@ window.saveCreatedSticker = async () => {
     
     window.showToast("Sticker saved to pack!");
     window.closeStickerMaker();
-    window.openSinglePackView(currentActivePackId); // refresh
+    window.openSinglePackView(currentActivePackId); 
 };
 
 
@@ -1651,7 +1639,6 @@ window.toggleChatStickerDrawer = async () => {
     if(drawer.classList.contains('hidden')) {
         drawer.classList.remove('hidden');
         drawer.style.display = 'flex';
-        // load stickers into grid
         const grid = document.getElementById('chat-sticker-grid');
         grid.innerHTML = '<div class="col-span-4 text-center text-xs p-4"><i class="fas fa-spinner fa-spin"></i></div>';
         
@@ -1679,8 +1666,8 @@ window.toggleChatStickerDrawer = async () => {
 };
 
 window.sendChatSticker = (url) => {
-    dispatchMessage(null, url, null, true); // true indicates it's a sticker
-    window.toggleChatStickerDrawer(); // close drawer
+    dispatchMessage(null, url, null, true); 
+    window.toggleChatStickerDrawer(); 
 };
 
 // -------------------------------------------------------------
@@ -1864,7 +1851,6 @@ function applyProfileCoverStyle(user, prefix) {
     if (!header) return;
 
     if (user.isPremium && (user.profileGradient || user.profilePatternIcon)) {
-        // DUAL COLOR GRADIENT SUPPORT
         if(user.profileGradient && user.profileGradient.startsWith('custom:')) {
             const parts = user.profileGradient.split(':');
             header.style.background = `linear-gradient(135deg, ${parts[1]}, ${parts[2]})`;
@@ -2165,10 +2151,10 @@ window.submitPremiumUtr = async (btn) => {
     const utr = modal.querySelector('#premium-utr-input').value.trim();
     if (!utr || utr.length < 6) return window.showToast('Please enter a valid UTR number', 'exclamation-circle', 'text-red-400');
     
-    // ANTI-SPAM PREMIUM REQUEST (5 HR BAN IF ABUSED)
+    // ANTI-SPAM PREMIUM REQUEST
     let premReqCount = parseInt(localStorage.getItem('ctx_prem_req') || '0');
     if(premReqCount > 3) {
-        banUntil = Date.now() + (5 * 60 * 60 * 1000); // 5 Hr ban
+        banUntil = Date.now() + (5 * 60 * 60 * 1000); 
         localStorage.setItem('ctx_ban_until', banUntil);
         window.closeModal(btn);
         return showBanScreen(null, true, banUntil);
@@ -2240,7 +2226,7 @@ window.saveModernEdit = async (field, btn) => {
     if (!newVal) return;
 
     if (field === 'username') {
-        newVal = newVal.replace(/\s+/g, '').toLowerCase(); // NO SPACE ALLOWED
+        newVal = newVal.replace(/\s+/g, '').toLowerCase(); 
         if (RESERVED_USERNAMES.includes(newVal)) {
             return window.showToast("Username is reserved", "exclamation-circle", "text-red-400");
         }
@@ -2489,7 +2475,7 @@ window.openGroupDetailsModal = async function(groupId) {
                     </div>
                 </div>
                 <div class="flex gap-1">
-                    ${canPromoteDemote ? `<button onclick="window.toggleAdminRole('${groupId}', '${memberUid}',${!isThisAdmin})" class="text-[10px] px-2 py-1 bg-gray-100 rounded-lg font-bold">${isThisAdmin ? 'Demote' : 'Promote'}</button>` : ''}
+                    ${canPromoteDemote ? `<button onclick="window.toggleAdminRole('${groupId}', '${memberUid}', ${!isThisAdmin})" class="text-[10px] px-2 py-1 bg-gray-100 rounded-lg font-bold">${isThisAdmin ? 'Demote' : 'Promote'}</button>` : ''}
                     ${canRemoveThisMember ? `<button onclick="window.removeMemberFromGroup('${groupId}', '${memberUid}')" class="text-[10px] px-2 py-1 bg-red-50 text-red-500 rounded-lg font-bold">Remove</button>` : ''}
                 </div>
             </div>
@@ -2770,6 +2756,281 @@ window.terminateSession = async (sId, btn) => {
     window.showToast("Device session terminated"); 
     window.openActiveDevicesModal(); 
 };
+
+// -------------------------------------------------------------
+// PROFILE MEDIA / LINKS LOADERS
+// -------------------------------------------------------------
+async function populateContactMediaAndLinks() {
+    const mediaGrid = document.getElementById('overlay-profile-media-grid');
+    const linksList = document.getElementById('overlay-profile-links-list');
+    
+    if(!mediaGrid || !linksList) return;
+
+    mediaGrid.innerHTML = '';
+    linksList.innerHTML = '';
+
+    if (!window.activeChatId) {
+        mediaGrid.innerHTML = '<div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>';
+        linksList.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No links available.</div>';
+        return;
+    }
+
+    const snap = await get(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`));
+    if (!snap.exists()) {
+        mediaGrid.innerHTML = '<div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>';
+        linksList.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No links available.</div>';
+        return;
+    }
+
+    const msgs = snap.val();
+    let mediaCount = 0;
+    let linkCount = 0;
+    const urlRegex = /(https?:\/\/[^\s]+|www\.[^\s]+)/gi;
+
+    Object.values(msgs).forEach(m => {
+        if (m.type === 'image' && m.imageUrl) {
+            mediaGrid.innerHTML += `<div class="rounded-lg overflow-hidden bg-black aspect-square cursor-pointer border border-gray-100 dark:border-white/5" onclick="window.previewImage('${m.imageUrl}')"><img src="${m.imageUrl}" class="w-full h-full object-cover"></div>`;
+            mediaCount++;
+        }
+        if (m.type === 'text' && m.text) {
+            const rawText = decryptData(m.text);
+            const links = rawText.match(urlRegex);
+            if (links) {
+                links.forEach(link => {
+                    linksList.innerHTML += `
+                        <div class="p-2.5 bg-gray-50 dark:bg-slate-800 rounded-xl flex items-center justify-between border border-gray-100 dark:border-white/5 mb-1.5 cursor-pointer" onclick="window.triggerScamWarning('${encodeURIComponent(link)}')">
+                            <div class="min-w-0 flex-1 pr-2"><span class="text-xs font-bold text-blue-600 dark:text-blue-400 truncate block">${link}</span></div>
+                            <i class="fas fa-external-link-alt text-gray-400 text-xs"></i>
+                        </div>
+                    `;
+                    linkCount++;
+                });
+            }
+        }
+    });
+
+    if (mediaCount === 0) mediaGrid.innerHTML = '<div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>';
+    if (linkCount === 0) linksList.innerHTML = '<div class="text-center py-6 text-gray-400 text-xs">No links available.</div>';
+}
+
+window.openStoryEditor = () => { document.getElementById('story-editor-overlay')?.classList.remove('hidden'); };
+
+window.closeStoryEditor = () => {
+    document.getElementById('story-editor-overlay')?.classList.add('hidden');
+    if (typeof storyCtx !== 'undefined' && storyCtx && storyCanvas) storyCtx.clearRect(0, 0, storyCanvas.width, storyCanvas.height);
+    const placeholder = document.getElementById('story-upload-placeholder');
+    if (placeholder) { placeholder.classList.remove('hidden'); placeholder.style.display = 'flex'; }
+    const textLayer = document.getElementById('story-text-overlay');
+    if (textLayer) { textLayer.classList.add('hidden'); textLayer.innerHTML = ''; }
+    if (document.getElementById('story-caption-input')) document.getElementById('story-caption-input').value = '';
+    if (typeof storyImage !== 'undefined') storyImage = null;
+};
+
+window.toggleStoryBrush = () => {
+    isBrushActive = !isBrushActive;
+    const btn = document.getElementById('brush-toggle-btn');
+    if(btn) { btn.classList.toggle('bg-blue-600', isBrushActive); btn.classList.toggle('bg-white/10', !isBrushActive); }
+    window.showToast(isBrushActive ? 'Brush tool activated' : 'Brush tool deactivated');
+};
+
+window.addStoryTextPrompt = () => {
+    const t = prompt("Enter text for story:");
+    if(t) { const el = document.getElementById('story-text-overlay'); el.innerHTML = `<span>${t}</span>`; el.classList.remove('hidden'); }
+};
+
+window.publishStory = async () => {
+    if (!storyCanvas || !storyImage) return window.showToast('Please select a photo first!', 'exclamation-circle', 'text-red-400');
+    
+    const b64 = storyCanvas.toDataURL('image/jpeg', 0.65);
+    const caption = document.getElementById('story-caption-input')?.value || '';
+    const textOverlayStr = document.getElementById('story-text-overlay')?.innerText || '';
+    const now = Date.now();
+    
+    await push(ref(db, `${dbStoriesPath}`), {
+        ownerUid: window.currentUser.uid, ownerName: window.currentUser.name, ownerDp: window.currentUser.dp,
+        photo: b64, caption: caption, storyText: textOverlayStr !== 'Story Text' ? textOverlayStr : '',
+        createdAt: now, likes: {}, views: {}
+    });
+    window.showToast("Story posted successfully!"); window.closeStoryEditor();
+};
+
+window.deleteStory = (storyId) => { 
+    window.appConfirm("Delete this post?", async () => {
+        await remove(ref(db, `${dbStoriesPath}/${storyId}`)); 
+        window.showToast("Post deleted"); 
+    });
+};
+
+// -------------------------------------------------------------
+// DOM SETUP & LOGIN / SIGNUP LOGIC
+// -------------------------------------------------------------
+
+function setupDomListeners() {
+    document.getElementById('go-to-signup').onclick = e => { e.preventDefault(); switchMainView('signup-view'); };
+    document.getElementById('go-to-login').onclick = e => { e.preventDefault(); switchMainView('login-view'); };
+
+    const loginBtn = document.querySelector('#login-form button');
+    if(loginBtn) {
+        loginBtn.type = 'button'; 
+        loginBtn.onclick = async () => {
+            const btn = loginBtn;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const user = normalizeUsername(document.getElementById('login-username').value).replace(/[.#$\[\]]/g, '_');
+            const pass = document.getElementById('login-password').value;
+            try {
+                if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
+                const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
+                
+                // DECRYPT PASSWORD FOR CHECKING
+                if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
+                window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+
+                const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: encryptData(`Security Alert: New login detected for your Chatrix account at ${timeStr}. Device: ${getDeviceLabel().label}.`), timestamp: now, time: timeStr });
+                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: encryptData(`Security Alert: New login detected at ${timeStr}`), timestamp: now, unread: true });
+                
+                window.history.replaceState({}, document.title, window.location.pathname);
+                proceedToMainApp();
+            } catch (err) { 
+                const errEl = document.getElementById('login-error'); 
+                errEl.textContent = err.message; 
+                errEl.classList.remove('hidden'); 
+            } finally { 
+                btn.innerHTML = originalText; 
+            }
+        };
+    }
+
+    const signupBtn = document.querySelector('#signup-form button');
+    if(signupBtn) {
+        signupBtn.type = 'button';
+        signupBtn.onclick = async () => {
+            const btn = signupBtn;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+            const name = document.getElementById('signup-name').value.trim(), rawUser = normalizeUsername(document.getElementById('signup-username').value), user = rawUser.replace(/[.#$\[\]]/g, '_'), pass = document.getElementById('signup-password').value;
+            
+            try {
+                if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
+                
+                const usersSnap = await get(ref(db, dbUsersPath));
+                if (usersSnap.exists()) {
+                    const allU = usersSnap.val();
+                    for (let k in allU) {
+                        if (normalizeUsername(allU[k].username) === normalizeUsername(rawUser) || k === user) {
+                            throw new Error("Username already taken by someone else.");
+                        }
+                    }
+                }
+
+                // ENCRYPT PASSWORD BEFORE SAVING
+                const encPass = encryptData(pass);
+                const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
+                const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
+                await set(ref(db, `${dbUsersPath}/${user}`), newUser);
+
+                const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now();
+                await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: encryptData('Welcome to Chatrix! Connect with @ChatrixSupport for help.'), timestamp: now, time: new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) });
+                await update(ref(db, `${dbUserChatsPath}/${user}/${welcomeId}`), { id: welcomeId, targetUid: OFFICIAL_SYSTEM_UID, name: 'Chatrix', username: 'chatrix_official', dp: 'https://placehold.co/150/2563eb/ffffff?text=CX', isVerified: true, isOfficial: true, lastMessage: encryptData('Welcome to Chatrix!'), timestamp: now, unread: true });
+
+                window.currentUser = newUser; localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+                window.history.replaceState({}, document.title, window.location.pathname);
+                proceedToMainApp();
+            } catch (err) { 
+                const errEl = document.getElementById('signup-error'); 
+                errEl.textContent = err.message; 
+                errEl.classList.remove('hidden'); 
+            } finally { 
+                btn.innerHTML = originalText; 
+            }
+        };
+    }
+
+    document.getElementById('signup-dp').onchange = async (e) => {
+        if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 240); document.getElementById('dp-preview').src = b64; document.getElementById('dp-preview').classList.remove('hidden'); document.getElementById('dp-icon').classList.add('hidden'); }
+    };
+
+    document.getElementById('change-dp-input').onchange = async (e) => {
+        if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 240); window.currentUser.dp = b64; await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); populateUserData(); window.showToast('Profile photo updated'); }
+    };
+
+    // PREMIUM BUTTON ROUTING FIX
+    const premiumBtnAction = document.getElementById('premium-btn-action');
+    if (premiumBtnAction) {
+        premiumBtnAction.onclick = () => {
+            if (window.currentUser && window.currentUser.isPremium) {
+                window.openAdvancedColorPicker(); 
+            } else {
+                window.openPremiumModal(); 
+            }
+        };
+    }
+
+    const msgInput = document.getElementById('message-input'), sendBtn = document.getElementById('send-btn'), micBtn = document.getElementById('mic-btn');
+    if(msgInput) {
+        msgInput.addEventListener('focus', () => { setTimeout(() => { const container = document.getElementById('messages-container'); if (container) container.scrollTop = container.scrollHeight; }, 300); });
+        msgInput.oninput = () => { msgInput.style.height = 'auto'; msgInput.style.height = msgInput.scrollHeight + 'px'; if (msgInput.value.trim()) { sendBtn.classList.remove('hidden'); micBtn.classList.add('hidden'); } else { sendBtn.classList.add('hidden'); micBtn.classList.remove('hidden'); } };
+        msgInput.onkeydown = (e) => { if (e.key === 'Enter') { if (enterIsSend && !e.shiftKey) { e.preventDefault(); if (msgInput.value.trim()) sendBtn.click(); } } };
+    }
+    
+    if(sendBtn) {
+        sendBtn.onclick = (e) => { e.preventDefault(); const text = msgInput.value.trim(); if (!text) return; dispatchMessage(text); msgInput.value = ''; msgInput.style.height = 'auto'; sendBtn.classList.add('hidden'); micBtn.classList.remove('hidden'); };
+    }
+
+    const attachInp = document.getElementById('attachment-input');
+    if(attachInp) {
+        attachInp.onchange = async (e) => { if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 720); dispatchMessage('', b64); } };
+    }
+
+    const storyInput = document.getElementById('story-file-input');
+    if (storyInput) {
+        storyInput.onchange = (e) => {
+            if (e.target.files?.[0]) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    storyImage = new Image();
+                    storyImage.onload = () => {
+                        storyCanvas = document.getElementById('story-canvas'); storyCtx = storyCanvas.getContext('2d');
+                        let cw = 720, ch = Math.round((storyImage.height / storyImage.width) * cw);
+                        storyCanvas.width = cw; storyCanvas.height = ch; storyCtx.drawImage(storyImage, 0, 0, cw, ch);
+                        const placeholder = document.getElementById('story-upload-placeholder');
+                        if (placeholder) { placeholder.classList.add('hidden'); placeholder.style.display = 'none'; }
+                    };
+                    storyImage.src = event.target.result;
+                };
+                reader.readAsDataURL(e.target.files[0]);
+            }
+        };
+    }
+    
+    if (document.getElementById('story-canvas')) {
+        const cvs = document.getElementById('story-canvas');
+        const draw = (e) => {
+            if (!isDrawing || !isBrushActive) return;
+            const rect = cvs.getBoundingClientRect(), scaleX = cvs.width / rect.width, scaleY = cvs.height / rect.height;
+            const x = (e.clientX || e.touches?.[0]?.clientX - rect.left) * scaleX, y = (e.clientY || e.touches?.[0]?.clientY - rect.top) * scaleY;
+            storyCtx.lineWidth = 10; storyCtx.lineCap = 'round'; storyCtx.strokeStyle = document.getElementById('story-brush-color')?.value || '#ef4444';
+            storyCtx.lineTo(x, y); storyCtx.stroke(); storyCtx.beginPath(); storyCtx.moveTo(x, y);
+        };
+        cvs.addEventListener('mousedown', (e) => { isDrawing = true; draw(e); });
+        cvs.addEventListener('mousemove', draw);
+        cvs.addEventListener('mouseup', () => { isDrawing = false; storyCtx?.beginPath(); });
+        cvs.addEventListener('touchstart', (e) => { isDrawing = true; draw(e); }, {passive: true});
+        cvs.addEventListener('touchmove', draw, {passive: true});
+        cvs.addEventListener('touchend', () => { isDrawing = false; storyCtx?.beginPath(); });
+    }
+
+    const searchInput = document.getElementById('global-search-input'), clearSearchBtn = document.getElementById('clear-search-btn');
+    if (searchInput) {
+        searchInput.oninput = (e) => {
+            const q = e.target.value.trim();
+            if (q) { clearSearchBtn.classList.remove('hidden'); document.getElementById('search-history-header').classList.add('hidden'); performLiveSearch(q); } 
+            else { clearSearchBtn.classList.add('hidden'); document.getElementById('search-history-header').classList.remove('hidden'); renderSearchHistory(); }
+        };
+    }
+    if (clearSearchBtn) { clearSearchBtn.onclick = () => { searchInput.value = ''; clearSearchBtn.classList.add('hidden'); renderSearchHistory(); }; }
+}
 
 // -------------------------------------------------------------
 // HELPER UTILITIES
