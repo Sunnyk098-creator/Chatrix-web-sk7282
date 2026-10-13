@@ -106,9 +106,6 @@ body, html {
 .chat-bubble-received a.mention-link { color: #2563eb !important; text-decoration: underline !important; font-weight: 700 !important; }
 .chat-bubble-received a.web-link { color: #0284c7 !important; text-decoration: underline !important; font-weight: 600 !important; }
 
-/* Custom Sticker Bubble Style */
-.chat-bubble-sticker { background: transparent !important; border: none !important; box-shadow: none !important; padding: 0 !important; max-width: 140px; }
-
 .chat-bg { background-color: var(--chat-bg-color); background-image: var(--chat-wallpaper); background-size: cover; background-position: center; }
 
 .pulse-ring {
@@ -149,9 +146,6 @@ body, html {
 /* Custom In-App Alert Modal classes */
 .alert-modal-enter { opacity: 0; pointer-events: none; }
 .alert-modal-enter-active { opacity: 1; pointer-events: auto; transition: opacity 0.15s ease-out; }
-
-/* Sticker Draw Canvas */
-#sticker-draw-canvas { touch-action: none; background: white; }
 
 .draggable-text { touch-action: none; user-select: none; will-change: transform; cursor: grab; }
 .draggable-text:active { cursor: grabbing; }
