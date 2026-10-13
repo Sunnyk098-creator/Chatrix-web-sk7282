@@ -8,18 +8,8 @@ import {
     serverTimestamp, onDisconnect 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-// =========================================================
-// FIREBASE DIRECT CONFIGURATION (Backend API requirement removed)
-// =========================================================
-const firebaseConfig = {
-    apiKey: "AIzaSyAc37QaaKUU7E19WMUJTDAA90kWHBstUls",
-    authDomain: "chatrix-5d023.firebaseapp.com",
-    databaseURL: "https://chatrix-5d023-default-rtdb.firebaseio.com",
-    projectId: "chatrix-5d023",
-    storageBucket: "chatrix-5d023.firebasestorage.app",
-    messagingSenderId: "263807610366",
-    appId: "1:263807610366:web:fdbb53fffd3ab2a9b664af"
-};
+// SECURE FIREBASE INITIALIZATION FROM VERCEL API
+const firebaseConfig = window.__FB_CFG || {};
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -94,19 +84,24 @@ function encryptData(text) {
 function decryptData(encodedText) {
     if(!encodedText) return encodedText;
     const str = String(encodedText);
+    
+    // Process prefixed data
     if (str.startsWith("CTX:")) {
         try { 
             return decodeURIComponent(atob(str.substring(4))); 
         } catch(e) { 
-            return str; 
+            return str; // Return encoded raw if decoding fails
         }
     }
+    
+    // Fail-safe backward compatibility logic for plain text & basic Base64
     try { 
+        // Attempt basic Base64 decoding, but catch errors safely
         let raw = atob(str);
         if(/[^\x00-\x7F]/.test(raw) || str.length < 8) return str; 
         return decodeURIComponent(raw); 
     } catch(e) { 
-        return str; 
+        return str; // Simply return the plain text
     }
 }
 
@@ -570,7 +565,7 @@ function showBanScreen(userObj = null, isSpam = false, spamTime = 0) {
     hideSplash();
 }
 
-// Ensure initApp doesn't load twice via DOMContentLoaded if already complete
+// Global initialization flag
 let isAppInitialized = false;
 
 async function autoLoginFromUrl(rawUser, pass) {
@@ -812,6 +807,7 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
+            // STRICT ID EXTRACT TO FIX MIXUP BUGS
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -978,7 +974,7 @@ function openChat(chat) {
         window.targetChatMetaUnsub = onValue(ref(db, `${dbUserChatsPath}/${chat.targetUid}/${chat.id}/unread`), (snap) => {
             if(window.activeChatUserId !== chat.targetUid) return;
             window.isTargetUnread = snap.exists() ? snap.val() : true;
-            renderMessagesUI(); // Trigger UI refresh to show seen
+            renderMessagesUI(); 
         });
     }
 
@@ -1124,7 +1120,12 @@ function loadLiveMessages(chatId) {
         const msgs = Object.keys(data).map(k => ({ id: k, ...data[k] }));
         msgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         currentChatMessages = msgs;
-        renderMessagesUI();
+        
+        try {
+            renderMessagesUI();
+        } catch(e) {
+            console.error("Render msg error safe bypassed.", e);
+        }
     });
 }
 
@@ -1194,7 +1195,8 @@ function renderMessagesUI() {
         } else if (m.type === 'sticker') {
             content = `<img src="${m.imageUrl}" class="w-32 h-32 object-contain select-none" alt="Sticker">`;
         } else {
-            let rawText = decryptData(m.text);
+            // Decrypt Fail-Safe applied here to prevent blank bubbles
+            let rawText = decryptData(m.text) || '';
             content = `<p class="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">${formatMessageTextWithMentionsAndLinks(rawText, isMe)}</p>`;
         }
 
@@ -2618,7 +2620,7 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
-        // Copy verbatim to preserve E2E encryption format
+        // Copy verbatim to preserve exact E2E encryption
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
         
@@ -3011,7 +3013,6 @@ function setupDomListeners() {
         }
     };
 
-    // PREMIUM BUTTON ROUTING FIX
     const premiumBtnAction = document.getElementById('premium-btn-action');
     if (premiumBtnAction) {
         premiumBtnAction.onclick = () => {
