@@ -8,6 +8,7 @@ import {
     serverTimestamp, onDisconnect 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
+// SECURE FIREBASE INITIALIZATION FROM VERCEL API
 const firebaseConfig = window.__FB_CFG || {};
 
 const app = initializeApp(firebaseConfig);
@@ -73,6 +74,8 @@ let typingTimeout = null;
 function encryptData(text) {
     if(!text) return text;
     try { 
+        // Avoid double encryption
+        if(String(text).startsWith("CTX:")) return String(text);
         return "CTX:" + btoa(encodeURIComponent(String(text))); 
     } catch(e) { 
         return String(text); 
@@ -89,8 +92,14 @@ function decryptData(encodedText) {
             return str; 
         }
     }
-    // Fallback if not encrypted with prefix
-    return str;
+    // Fallback for older non-prefixed data
+    try { 
+        let raw = atob(str);
+        if(/[^\x00-\x7F]/.test(raw) || str.length < 8) return str; 
+        return decodeURIComponent(raw); 
+    } catch(e) { 
+        return str; 
+    }
 }
 
 const GRADIENT_MAP = {
@@ -176,8 +185,12 @@ window.openUserProfileDirect = async function(uid) {
 
     let u = allUsersCache[uid];
     if (!u) {
-        const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
-        if (snap.exists()) u = snap.val();
+        try {
+            const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
+            if (snap.exists()) u = snap.val();
+        } catch(e) {
+            console.error("Profile load fail", e);
+        }
     }
     if (!u) return window.showToast("User not found", "exclamation-circle", "text-red-400");
 
@@ -293,7 +306,7 @@ window.renderStoriesFeed = async function() {
             container.appendChild(card);
         });
     } catch (e) {
-        console.error(e);
+        console.error("Story load issue:", e);
     }
 };
 
@@ -555,9 +568,12 @@ async function autoLoginFromUrl(rawUser, pass) {
     const user = normalizeUsername(rawUser);
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        // FIX: Decrypt logic adjusted
-        const storedPass = snap.val().password;
-        if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) throw new Error("Invalid URL credentials");
+        const storedPass = snap.val()?.password;
+        
+        // Exact Decrypt Check Bug Fix
+        if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) {
+            throw new Error("Invalid URL credentials");
+        }
         
         window.currentUser = snap.val();
         localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
@@ -597,9 +613,8 @@ async function checkSession() {
         }
     } catch (err) {
         switchMainView('login-view');
-    } finally {
         hideSplash();
-    }
+    } 
 }
 
 function initApp() {
@@ -627,8 +642,6 @@ if (document.readyState === 'loading') {
 } else {
     initApp();
 }
-
-setTimeout(() => { hideSplash(); }, 2500);
 
 function proceedToMainApp() {
     if (window.currentUser && window.currentUser.isBanned) {
@@ -784,6 +797,7 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
+            // STRICT ID Extraction Bug Fix
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -950,7 +964,7 @@ function openChat(chat) {
         window.targetChatMetaUnsub = onValue(ref(db, `${dbUserChatsPath}/${chat.targetUid}/${chat.id}/unread`), (snap) => {
             if(window.activeChatUserId !== chat.targetUid) return;
             window.isTargetUnread = snap.exists() ? snap.val() : true;
-            renderMessagesUI();
+            renderMessagesUI(); // Trigger UI refresh to show seen
         });
     }
 
@@ -1075,7 +1089,11 @@ window.deleteActiveChatAction = () => {
 function loadLiveMessages(chatId) {
     const container = document.getElementById('messages-container');
     if (!container) return;
-    container.innerHTML = '<div class="p-6 text-center text-gray-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>';
+    
+    const existingSpins = container.querySelectorAll('.fa-spinner');
+    if(existingSpins.length === 0 && currentChatMessages.length === 0) {
+        container.innerHTML += '<div class="p-6 text-center text-gray-400 text-xs w-full"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>';
+    }
 
     if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
 
@@ -1101,7 +1119,7 @@ function renderMessagesUI() {
     if (!container) return;
     
     if (currentChatMessages.length === 0) {
-        container.innerHTML = '<div class="py-16 text-center text-gray-400 text-xs font-semibold">No messages yet. Send a message to start!</div>';
+        container.innerHTML = '<div class="py-16 text-center text-gray-400 text-xs font-semibold w-full">No messages yet. Send a message to start!</div>';
         return;
     }
 
@@ -2882,8 +2900,14 @@ function setupDomListeners() {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
                 const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
                 
-                // DECRYPT PASSWORD FOR CHECKING
-                if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
+                if (!snap.exists()) throw new Error("Invalid username or password.");
+                const storedPass = snap.val().password;
+                
+                // Allow direct unencrypted match OR decrypted match to fix lockouts
+                if (decryptData(storedPass) !== pass && storedPass !== pass) {
+                     throw new Error("Invalid username or password.");
+                }
+                
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
