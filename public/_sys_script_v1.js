@@ -8,8 +8,18 @@ import {
     serverTimestamp, onDisconnect 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
-// SECURE FIREBASE INITIALIZATION FROM VERCEL API
-const firebaseConfig = window.__FB_CFG || {};
+// =========================================================
+// FIREBASE DIRECT CONFIGURATION (Backend API requirement removed)
+// =========================================================
+const firebaseConfig = {
+    apiKey: "AIzaSyAc37QaaKUU7E19WMUJTDAA90kWHBstUls",
+    authDomain: "chatrix-5d023.firebaseapp.com",
+    databaseURL: "https://chatrix-5d023-default-rtdb.firebaseio.com",
+    projectId: "chatrix-5d023",
+    storageBucket: "chatrix-5d023.firebasestorage.app",
+    messagingSenderId: "263807610366",
+    appId: "1:263807610366:web:fdbb53fffd3ab2a9b664af"
+};
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -119,7 +129,7 @@ const GRADIENT_MAP = {
 
 function normalizeUsername(raw) {
     if (!raw) return '';
-    return String(raw).replace(/^@+/, '').toLowerCase().trim(); // Strictly no spaces handled in signup
+    return String(raw).replace(/^@+/, '').toLowerCase().trim();
 }
 
 function formatLastSeenTime(timestamp) {
@@ -560,6 +570,9 @@ function showBanScreen(userObj = null, isSpam = false, spamTime = 0) {
     hideSplash();
 }
 
+// Ensure initApp doesn't load twice via DOMContentLoaded if already complete
+let isAppInitialized = false;
+
 async function autoLoginFromUrl(rawUser, pass) {
     if(checkRateLimit()) return showBanScreen(null, true, banUntil);
 
@@ -568,6 +581,7 @@ async function autoLoginFromUrl(rawUser, pass) {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
         const storedPass = snap.val()?.password;
         
+        // Exact Decrypt Check
         if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) {
             throw new Error("Invalid URL credentials");
         }
@@ -615,6 +629,9 @@ async function checkSession() {
 }
 
 function initApp() {
+    if(isAppInitialized) return;
+    isAppInitialized = true;
+    
     try {
         applyStoredAppearance();
         setupDomListeners();
@@ -634,6 +651,7 @@ function initApp() {
     }
 }
 
+// Safe invocation
 if (document.readyState === 'loading') {
     window.addEventListener('DOMContentLoaded', initApp);
 } else {
@@ -794,7 +812,6 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
-            // STRICT ID EXTRACT TO FIX MIXUP BUGS
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -886,7 +903,7 @@ function renderChatList() {
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-center mb-0.5">
-                    <h4 class="font-bold text-xs truncate flex items-center text-gray-900 dark:text-white">${chat.name}${vHtml}</h4>
+                    <h4 class="font-bold text-xs truncate flex items-center gap-1 text-gray-900 dark:text-white">${chat.name}${vHtml}</h4>
                     <span class="text-[10px] text-gray-400 shrink-0 ml-2">${chat.time || ''}</span>
                 </div>
                 <div class="flex justify-between items-center">
@@ -2601,7 +2618,7 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
-        // Data is already encrypted in DB, copy as is for forward
+        // Copy verbatim to preserve E2E encryption format
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
         
@@ -2932,7 +2949,6 @@ function setupDomListeners() {
             const name = document.getElementById('signup-name').value.trim();
             let rawUser = document.getElementById('signup-username').value;
             
-            // DENY SPACES IN USERNAME
             if(/\s/.test(rawUser)) {
                 btn.innerHTML = originalText;
                 const errEl = document.getElementById('signup-error');
@@ -2994,6 +3010,18 @@ function setupDomListeners() {
             window.showToast('Profile photo updated'); 
         }
     };
+
+    // PREMIUM BUTTON ROUTING FIX
+    const premiumBtnAction = document.getElementById('premium-btn-action');
+    if (premiumBtnAction) {
+        premiumBtnAction.onclick = () => {
+            if (window.currentUser && window.currentUser.isPremium) {
+                window.openAdvancedColorPicker(); 
+            } else {
+                window.openPremiumModal(); 
+            }
+        };
+    }
 
     const msgInput = document.getElementById('message-input'), sendBtn = document.getElementById('send-btn'), micBtn = document.getElementById('mic-btn');
     if(msgInput) {
