@@ -1,4 +1,4 @@
-/**
+/*
  * Chatrix — Direct Realtime Engine (public/_sys_script_v1.js)
  */
 
@@ -77,22 +77,14 @@ let profileTempColor1 = '#3b82f6';
 let profileTempColor2 = '';
 
 // ==========================================
-// RATE LIMITING & SECURITY GUARDS
+// DATABASE-BACKED RATE LIMITING & SECURITY GUARDS
 // ==========================================
 
-// 1. Rapid reload rate limit check (> 7 reloads in 12s -> 2 Hour Ban)
+// 1. Rapid reload rate limit check (> 7 reloads in 12s -> 2 Hour Ban in Firebase Database)
 (function enforceReloadRateLimit() {
     try {
         const now = Date.now();
-        const BAN_KEY = 'chatrix_local_ban';
         const RELOAD_KEY = 'chatrix_reload_history';
-
-        const existingBan = JSON.parse(localStorage.getItem(BAN_KEY) || 'null');
-        if (existingBan && existingBan.expiresAt > now) {
-            return;
-        } else if (existingBan && existingBan.expiresAt <= now) {
-            localStorage.removeItem(BAN_KEY);
-        }
 
         let history = JSON.parse(localStorage.getItem(RELOAD_KEY) || '[]');
         history = history.filter(ts => now - ts < 12000);
@@ -100,18 +92,22 @@ let profileTempColor2 = '';
         localStorage.setItem(RELOAD_KEY, JSON.stringify(history));
 
         if (history.length > 7) {
-            const expiresAt = now + (2 * 60 * 60 * 1000); // 2 hours
-            localStorage.setItem(BAN_KEY, JSON.stringify({
-                reason: "Suspicious activity detected: rapid app reload spam.",
-                expiresAt: expiresAt,
-                isPermanent: false
-            }));
             localStorage.removeItem(RELOAD_KEY);
+            const savedUser = JSON.parse(localStorage.getItem('chatrix_user') || 'null');
+            if (savedUser && savedUser.uid) {
+                const banExpiry = now + (2 * 60 * 60 * 1000); // 2 hours
+                // PERSIST BAN IN FIREBASE DATABASE SO NO BROWSER CHANGE CAN BYPASS
+                update(ref(db, `${dbUsersPath}/${savedUser.uid}`), {
+                    isBanned: true,
+                    banReason: "Suspicious activity detected: rapid app reload spam.",
+                    banExpiresAt: banExpiry
+                }).catch(() => {});
+            }
         }
     } catch(e) {}
 })();
 
-// Check if user is currently banned (Local or Server)
+// Check if user is currently banned directly from Realtime Database
 function checkAndEnforceBan() {
     const now = Date.now();
     let isBanned = false;
@@ -119,30 +115,31 @@ function checkAndEnforceBan() {
     let expiresAt = null;
     let isPermanent = false;
 
-    // Check Local Rate-Limit Ban
-    try {
-        const localBan = JSON.parse(localStorage.getItem('chatrix_local_ban') || 'null');
-        if (localBan) {
-            if (localBan.expiresAt > now) {
-                isBanned = true;
-                reason = localBan.reason;
-                expiresAt = localBan.expiresAt;
-            } else {
-                localStorage.removeItem('chatrix_local_ban');
-            }
-        }
-    } catch(e) {}
-
-    // Check Server/Admin Ban
+    // Check Firebase Database Ban State
     if (window.currentUser && window.currentUser.isBanned) {
-        isBanned = true;
-        reason = window.currentUser.banReason || "Account suspended by Administrator.";
-        if (window.currentUser.banExpiresAt && window.currentUser.banExpiresAt > now) {
-            expiresAt = window.currentUser.banExpiresAt;
-        } else if (!window.currentUser.banExpiresAt) {
-            isPermanent = true;
+        if (window.currentUser.banExpiresAt) {
+            if (window.currentUser.banExpiresAt > now) {
+                isBanned = true;
+                reason = window.currentUser.banReason || "Account temporarily restricted.";
+                expiresAt = window.currentUser.banExpiresAt;
+            } else {
+                // Ban has expired! Automatically unban in Database
+                update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), {
+                    isBanned: false,
+                    banReason: null,
+                    banExpiresAt: null
+                }).catch(() => {});
+                window.currentUser.isBanned = false;
+                window.currentUser.banReason = null;
+                window.currentUser.banExpiresAt = null;
+                localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+                isBanned = false;
+            }
         } else {
-            isBanned = false;
+            // No expiration timestamp => Permanent admin ban
+            isBanned = true;
+            reason = window.currentUser.banReason || "Account suspended by Administrator.";
+            isPermanent = true;
         }
     }
 
@@ -190,8 +187,16 @@ function checkAndEnforceBan() {
                 if (diff <= 0) {
                     if (timerEl) timerEl.innerText = "Expired. Please refresh.";
                     if (banCountdownTimer) clearInterval(banCountdownTimer);
-                    localStorage.removeItem('chatrix_local_ban');
-                    window.location.reload();
+                    // Clear ban in DB
+                    if (window.currentUser) {
+                        update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), {
+                            isBanned: false,
+                            banReason: null,
+                            banExpiresAt: null
+                        }).then(() => window.location.reload());
+                    } else {
+                        window.location.reload();
+                    }
                     return;
                 }
                 const hrs = Math.floor(diff / 3600000);
@@ -220,8 +225,9 @@ function checkAndEnforceBan() {
     }
 }
 
-// 2. Check Premium Request Spam (> 3 requests in 1 min -> 5 Hour Ban)
-function checkPremiumRequestRateLimit() {
+// 2. Check Premium Request Spam (> 3 requests in 1 min -> 5 Hour Ban in Database)
+async function checkPremiumRequestRateLimit() {
+    if (!window.currentUser?.uid) return false;
     const now = Date.now();
     const key = 'chatrix_premium_submits';
     let history = JSON.parse(localStorage.getItem(key) || '[]');
@@ -230,12 +236,17 @@ function checkPremiumRequestRateLimit() {
     localStorage.setItem(key, JSON.stringify(history));
 
     if (history.length >= 3) {
-        const expiresAt = now + (5 * 60 * 60 * 1000); // 5 hours
-        localStorage.setItem('chatrix_local_ban', JSON.stringify({
-            reason: "Excessive premium verification requests submitted.",
-            expiresAt: expiresAt,
-            isPermanent: false
-        }));
+        const banExpiry = now + (5 * 60 * 60 * 1000); // 5 hours
+        // STORE DIRECTLY IN DATABASE
+        await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), {
+            isBanned: true,
+            banReason: "Excessive premium verification requests submitted.",
+            banExpiresAt: banExpiry
+        });
+        window.currentUser.isBanned = true;
+        window.currentUser.banReason = "Excessive premium verification requests submitted.";
+        window.currentUser.banExpiresAt = banExpiry;
+        localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
         checkAndEnforceBan();
         return true;
     }
@@ -362,8 +373,11 @@ window.openUserProfileDirect = async function(uid) {
 
     document.getElementById('overlay-profile-dp').src = u.dp || 'https://placehold.co/150';
     
+    // TICK REMOVAL FIX: Tick only shows if user is premium or official service account
+    const isOfficialUser = uid === OFFICIAL_SYSTEM_UID;
+    const hasTick = Boolean(isOfficialUser || u.isPremium === true);
     let tColor = u.verifiedTickColor || 'text-blue-500';
-    let verifiedIcon = (u.isVerified || u.isPremium) ? `<i class="fas fa-check-circle ${tColor} text-xs ml-1"></i>` : '';
+    let verifiedIcon = hasTick ? `<i class="fas fa-check-circle ${tColor} text-xs ml-1"></i>` : '';
     document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${verifiedIcon}`;
     
     document.getElementById('overlay-profile-username').textContent = `@${u.username}`;
@@ -545,7 +559,7 @@ window.sendStoryReply = async () => {
         name: s.ownerName,
         username: cleanUser,
         dp: s.ownerDp,
-        isVerified: false 
+        isPremium: false 
     });
 
     setTimeout(() => {
@@ -736,7 +750,7 @@ function proceedToMainApp() {
     registerDeviceSession();
     hideSplash();
     
-    // Check bans after user data is ready
+    // Check bans after user data is ready from Firebase
     checkAndEnforceBan();
 
     const urlParams = new URLSearchParams(window.location.search);
@@ -814,7 +828,7 @@ function listenToUsersLive() {
             if (window.currentUser && allUsersCache[window.currentUser.uid]) {
                 window.currentUser = allUsersCache[window.currentUser.uid];
                 
-                // Realtime Ban enforcement
+                // Realtime Database-Level Ban enforcement
                 const isBanned = checkAndEnforceBan();
                 if (isBanned) return;
 
@@ -881,9 +895,9 @@ function listenToActiveChatsLive() {
             let name = chatMeta.name;
             let dp = chatMeta.dp;
             let username = chatMeta.username || otherUid;
-            let isVerified = chatMeta.isVerified || false;
             let tickColor = 'text-blue-500';
             let isOfficial = otherUid === OFFICIAL_SYSTEM_UID;
+            let isVerified = false;
 
             if (isSelf) {
                 name = 'Saved Messages';
@@ -897,13 +911,17 @@ function listenToActiveChatsLive() {
             } else if (chatMeta.isGroup) {
                 name = chatMeta.name || 'Group';
                 dp = chatMeta.dp || 'https://placehold.co/150/2563eb/ffffff?text=GRP';
+                isVerified = false;
             } else if (otherUid && allUsersCache[otherUid]) {
                 const u = allUsersCache[otherUid];
                 name = typeof u.name === 'string' ? u.name : (u.username || otherUid);
                 username = typeof u.username === 'string' ? u.username : otherUid;
                 dp = u.dp || `https://placehold.co/150/2563eb/ffffff?text=${name.charAt(0).toUpperCase()}`;
-                isVerified = Boolean(u.isVerified || u.isPremium);
+                // TICK REMOVAL FIX: Verified tick only exists if user has isPremium === true
+                isVerified = Boolean(u.isPremium === true);
                 tickColor = u.verifiedTickColor || 'text-blue-500';
+            } else {
+                isVerified = Boolean(chatMeta.isPremium === true);
             }
             
             let displayLastMsg = decryptData(chatMeta.lastMessage) || 'Conversation started';
@@ -1232,7 +1250,6 @@ function renderMessagesUI() {
 
         let content = '';
         if (m.type === 'sticker') {
-            // STICKER BUBBLE RENDERING
             content = `
                 <div class="chat-sticker-bubble">
                     <img src="${m.stickerUrl}" alt="Sticker" loading="lazy">
@@ -1336,7 +1353,7 @@ window.handleMentionClick = async (targetUsername) => {
     openDirectChatWithUser({
         uid: matchedUid, name: safeName, username: matchedUser.username || cleanUser,
         dp: matchedUser.dp || `https://placehold.co/150/2563eb/ffffff?text=${safeName.charAt(0).toUpperCase()}`,
-        isVerified: Boolean(matchedUser.isVerified || matchedUser.isPremium)
+        isPremium: Boolean(matchedUser.isPremium)
     });
 };
 
@@ -1392,10 +1409,11 @@ async function dispatchMessage(text, img = null, audio = null, stickerUrl = null
     });
 
     if (!isSelf && window.activeChatUserId && window.activeChatUserId !== OFFICIAL_SYSTEM_UID) {
+        // TICK FIX: Set isVerified based purely on isPremium
         await update(ref(db, `${dbUserChatsPath}/${window.activeChatUserId}/${window.activeChatId}`), {
             id: window.activeChatId, targetUid: window.currentUser.uid,
             name: window.currentUser.name, username: window.currentUser.username,
-            dp: window.currentUser.dp, isVerified: Boolean(window.currentUser.isVerified || window.currentUser.isPremium),
+            dp: window.currentUser.dp, isPremium: Boolean(window.currentUser.isPremium === true),
             lastMessage: previewEncrypted, timestamp: now, unread: true
         });
     }
@@ -1414,10 +1432,12 @@ function performLiveSearch(query) {
         const username = normalizeUsername(u.username || uid);
 
         if (name.toLowerCase().includes(cleanQ) || username.includes(cleanQ)) {
+            // TICK FIX: Verified tick only exists if user has isPremium === true
+            const hasTick = Boolean(uid === OFFICIAL_SYSTEM_UID || u.isPremium === true);
             matches.push({
                 uid, name, username: u.username || uid,
                 dp: u.dp || `https://placehold.co/150/2563eb/ffffff?text=${name.charAt(0).toUpperCase()}`,
-                isVerified: Boolean(u.isVerified || u.isPremium),
+                isVerified: hasTick,
                 tickColor: u.verifiedTickColor || 'text-blue-500'
             });
         }
@@ -1512,10 +1532,14 @@ window.closeSearchOverlay = () => {
 function openDirectChatWithUser(u) {
     const isSelf = u.uid === window.currentUser?.uid;
     const convId = isSelf ? `saved_${u.uid}` : [window.currentUser.uid, u.uid].sort().join('_');
+    const isOfficial = u.uid === OFFICIAL_SYSTEM_UID;
+    // TICK REMOVAL FIX: Verified tick only active if isPremium or official
+    const hasTick = Boolean(isOfficial || u.isPremium === true);
+
     openChat({
         id: convId, targetUid: u.uid, name: isSelf ? 'Saved Messages' : u.name,
         username: u.username, dp: isSelf ? 'https://placehold.co/150/2563eb/ffffff?text=Saved' : u.dp,
-        isVerified: u.isVerified, isSelf: isSelf, status: isSelf ? 'Saved' : 'online'
+        isVerified: hasTick, isSelf: isSelf, status: isSelf ? 'Saved' : 'online'
     });
 }
 
@@ -1534,14 +1558,15 @@ window.contactSupportInApp = async () => {
     }
     
     if (matchedUser) {
-        openDirectChatWithUser({ uid: matchedUid, name: matchedUser.name, username: matchedUser.username, dp: matchedUser.dp, isVerified: true });
+        openDirectChatWithUser({ uid: matchedUid, name: matchedUser.name, username: matchedUser.username, dp: matchedUser.dp, isPremium: true });
     } else {
-        openDirectChatWithUser({ uid: 'ChatrixSupport', name: 'Chatrix Support', username: 'ChatrixSupport', dp: 'https://placehold.co/150/0284c7/ffffff?text=Help', isVerified: true });
+        openDirectChatWithUser({ uid: 'ChatrixSupport', name: 'Chatrix Support', username: 'ChatrixSupport', dp: 'https://placehold.co/150/0284c7/ffffff?text=Help', isPremium: true });
     }
 };
 
 function populateUserData() {
     if (!window.currentUser) return;
+    // TICK REMOVAL FIX: If isPremium is false, tick is completely stripped
     const isPrem = window.currentUser.isPremium === true;
     const tickColor = window.currentUser.verifiedTickColor || 'text-blue-500';
     const badgeHtml = isPrem ? `<i class="fas fa-check-circle ${tickColor} text-xs ml-1"></i>` : '';
@@ -2324,8 +2349,9 @@ window.openPremiumModal = () => {
 };
 
 window.submitPremiumUtr = async (btn) => {
-    // RATE LIMIT CHECK: 5 Hour ban on spamming premium requests
-    if (checkPremiumRequestRateLimit()) return;
+    // RATE LIMIT CHECK: 5 Hour ban stored directly into Firebase Database
+    const isRateLimited = await checkPremiumRequestRateLimit();
+    if (isRateLimited) return;
 
     const modal = btn.closest('.bg-white');
     const utr = modal.querySelector('#premium-utr-input').value.trim();
@@ -2816,7 +2842,8 @@ window.confirmForward = async (msgId, btn) => {
         
         const targetChat = activeChatsList.find(x => x.id === targetChatId);
         if (targetChat && !targetChat.isGroup && targetChat.targetUid && targetChat.targetUid !== OFFICIAL_SYSTEM_UID && targetChat.targetUid !== window.currentUser.uid) {
-            await update(ref(db, `${dbUserChatsPath}/${targetChat.targetUid}/${targetChatId}`), { id: targetChatId, targetUid: window.currentUser.uid, name: window.currentUser.name, username: window.currentUser.username, dp: window.currentUser.dp, isVerified: Boolean(window.currentUser.isVerified || window.currentUser.isPremium), lastMessage: encryptData(`Forwarded: ${rawPreview}`), timestamp: now, unread: true });
+            // TICK FIX: Set isPremium explicitly
+            await update(ref(db, `${dbUserChatsPath}/${targetChat.targetUid}/${targetChatId}`), { id: targetChatId, targetUid: window.currentUser.uid, name: window.currentUser.name, username: window.currentUser.username, dp: window.currentUser.dp, isPremium: Boolean(window.currentUser.isPremium === true), lastMessage: encryptData(`Forwarded: ${rawPreview}`), timestamp: now, unread: true });
         }
     }
     window.showToast('Message forwarded successfully!'); window.closeModal(btn);
@@ -3093,6 +3120,12 @@ function setupDomListeners() {
                 
                 if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
+
+                // Verify ban state upon login
+                if (checkAndEnforceBan()) {
+                    btn.innerHTML = originalText;
+                    return;
+                }
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
                 await push(ref(db, `${dbChatsPath}/${welcomeId}/messages`), { senderId: OFFICIAL_SYSTEM_UID, text: encryptData(`Security Alert: New login detected for your Chatrix account at ${timeStr}. Device: ${getDeviceLabel().label}.`), timestamp: now, time: timeStr });
