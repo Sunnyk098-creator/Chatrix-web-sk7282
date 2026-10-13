@@ -46,20 +46,33 @@
         <p class="text-gray-400 text-sm max-w-xs text-center leading-relaxed">Chatrix is currently undergoing scheduled maintenance to improve your experience. We'll be back online shortly!</p>
     </div>
 
-    <!-- BANNED SCREEN -->
-    <div id="banned-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center bg-[#090d16] text-white p-6 pt-20 overflow-y-auto">
-        <img id="banned-dp" src="https://placehold.co/150" class="w-28 h-28 rounded-full border-[3px] border-red-500 mb-4 shadow-[0_0_40px_rgba(239,68,68,0.3)] object-cover">
-        <h1 id="banned-name" class="text-2xl font-black mb-1">User Name</h1>
-        <p id="banned-username" class="text-sm text-red-400 font-bold mb-8">@username</p>
+    <!-- ENHANCED BANNED SCREEN WITH REASON & COUNTDOWN TIMER -->
+    <div id="banned-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center bg-[#090d16] text-white p-6 pt-16 overflow-y-auto">
+        <img id="banned-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full border-[3px] border-red-500 mb-3 shadow-[0_0_40px_rgba(239,68,68,0.3)] object-cover">
+        <h1 id="banned-name" class="text-2xl font-black mb-0.5">User Name</h1>
+        <p id="banned-username" class="text-xs text-red-400 font-bold mb-6">@username</p>
         
-        <div class="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl text-center max-w-sm w-full mb-8">
-            <i class="fas fa-ban text-4xl text-red-500 mb-4 drop-shadow-md"></i>
-            <h2 class="text-lg font-bold mb-3 text-red-50">This account can no longer use Chatrix</h2>
-            <p class="text-xs text-gray-400 leading-relaxed mb-3">Your account has been restricted due to violations of our Community Guidelines or Terms of Service.</p>
-            <p class="text-[11px] text-gray-500 leading-relaxed font-medium">If you believe this was a mistake, you can request a review from our moderation team.</p>
+        <div class="bg-red-500/10 border border-red-500/20 p-5 rounded-3xl text-center max-w-sm w-full mb-6">
+            <i class="fas fa-ban text-3xl text-red-500 mb-3 drop-shadow-md"></i>
+            <h2 class="text-base font-bold mb-2 text-red-50">Account Restricted</h2>
+            
+            <!-- Live Ban Reason Display -->
+            <div class="bg-black/40 border border-red-500/30 rounded-xl p-3 mb-3 text-left">
+                <span class="text-[10px] font-bold text-red-400 uppercase tracking-wider block">Restriction Reason:</span>
+                <p id="ban-reason-text" class="text-xs text-white font-medium mt-0.5">Suspicious activity or community guidelines violation.</p>
+            </div>
+
+            <!-- Live Countdown Timer Display -->
+            <div id="ban-countdown-box" class="bg-red-950/40 border border-red-500/30 rounded-xl p-3 mb-3 text-center">
+                <span class="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Access Reinstatement In:</span>
+                <p id="ban-countdown-timer" class="text-lg font-black text-amber-400 font-mono tracking-widest mt-1">Calculating...</p>
+                <span id="ban-type-badge" class="inline-block mt-1 text-[9px] font-bold px-2 py-0.5 rounded-full bg-red-500/20 text-red-300">Temporary Restriction</span>
+            </div>
+
+            <p class="text-[11px] text-gray-400 leading-relaxed font-medium">If you believe this restriction is an error, please submit an appeal below.</p>
         </div>
         
-        <button onclick="document.getElementById('appeal-modal').classList.remove('hidden'); document.getElementById('appeal-modal').style.display='flex';" class="w-full max-w-sm py-4 bg-white text-black rounded-2xl font-black text-sm shadow-lg hover:scale-95 transition-transform btn-press">Request a Review</button>
+        <button onclick="document.getElementById('appeal-modal').classList.remove('hidden'); document.getElementById('appeal-modal').style.display='flex';" class="w-full max-w-sm py-3.5 bg-white text-black rounded-2xl font-black text-xs shadow-lg hover:scale-95 transition-transform btn-press mb-8">Request a Review</button>
     </div>
 
     <!-- APPEAL MODAL -->
@@ -115,7 +128,7 @@
     <!-- APP CONTAINER -->
     <div class="app-container" id="app">
 
-        <!-- SPLASH SCREEN (NEW ANIMATION) -->
+        <!-- SPLASH SCREEN -->
         <div id="splash-screen" class="absolute inset-0 z-[500] bg-white dark:bg-slate-900 flex flex-col items-center justify-center transition-opacity duration-300">
             <div class="relative w-32 h-32 mb-6 flex items-center justify-center">
                 <div class="absolute inset-0 rounded-full bg-blue-500/20 animate-ping"></div>
@@ -140,7 +153,7 @@
                 <p class="text-gray-500 text-sm mt-1 font-medium">Log in to Chatrix</p>
             </div>
             <form id="login-form" class="space-y-4">
-                <input type="text" id="login-username" required placeholder="Username or @username" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <input type="text" id="login-username" required placeholder="Username or @username" oninput="this.value = this.value.replace(/\s+/g, '')" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
                 <input type="password" id="login-password" required placeholder="Password" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
                 <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg transition-all btn-press">Sign In</button>
             </form>
@@ -157,7 +170,7 @@
                 <p class="text-gray-500 text-sm mt-0.5 font-medium">Create your private identity</p>
             </div>
             <form id="signup-form" class="space-y-4 flex-1 pb-8">
-                <div class="flex justify-center mb-4">
+                <div class="flex flex-col items-center mb-4">
                     <div class="relative btn-press">
                         <div class="w-20 h-20 rounded-full bg-white dark:bg-slate-800 border-2 border-dashed border-blue-400 flex items-center justify-center overflow-hidden cursor-pointer shadow-md" id="dp-preview-container">
                             <i class="fas fa-camera text-blue-500 text-xl" id="dp-icon"></i>
@@ -165,9 +178,16 @@
                         </div>
                         <input type="file" id="signup-dp" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
                     </div>
+                    <span class="text-[10px] text-gray-400 mt-1.5 font-medium">Max DP Size: 5MB</span>
                 </div>
                 <input type="text" id="signup-name" required placeholder="Full Name" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                <input type="text" id="signup-username" required placeholder="Username (e.g. syroxzen)" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                
+                <!-- STRICT NO-SPACE USERNAME INPUT -->
+                <div class="space-y-1">
+                    <input type="text" id="signup-username" required placeholder="Username (no spaces, e.g. syroxzen)" oninput="this.value = this.value.replace(/\s+/g, '')" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                    <p class="text-[10px] text-gray-400 px-2 font-medium">Spaces are strictly not allowed in usernames.</p>
+                </div>
+                
                 <input type="password" id="signup-password" required placeholder="Password" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
                 <button type="submit" class="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg btn-press">Create Account</button>
             </form>
@@ -251,12 +271,22 @@
                             </div>
                         </div>
 
+                        <!-- General & Customization Section -->
                         <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
                             <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.switchTab('profile')">
                                 <div class="w-7 text-center text-gray-400 text-base"><i class="fas fa-user"></i></div>
                                 <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Account</span>
                                 <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
                             </button>
+                            
+                            <!-- NEW: STICKER STUDIO MENU ITEM -->
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openStickerStudio()">
+                                <div class="w-7 text-center text-pink-500 text-base"><i class="fas fa-icons"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Sticker Studio</span>
+                                <span class="text-[9px] bg-pink-100 dark:bg-pink-900/40 text-pink-600 dark:text-pink-300 font-black px-2 py-0.5 rounded-full mr-2">NEW</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+
                             <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openAppearanceModal()">
                                 <div class="w-7 text-center text-purple-400 text-base"><i class="fas fa-palette"></i></div>
                                 <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Appearance</span>
@@ -496,13 +526,44 @@
                 <button onclick="window.cancelReply()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"><i class="fas fa-times text-xs"></i></button>
             </div>
 
-            <!-- CHAT INPUT BAR -->
+            <!-- CHAT STICKER KEYBOARD DRAWER (4X4 GRID) -->
+            <div id="chat-sticker-drawer" class="hidden flex-col bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-white/10 h-64 shrink-0 transition-all z-20">
+                <!-- Pack Header Tabs -->
+                <div class="flex items-center justify-between px-3 py-2 border-b border-gray-100 dark:border-white/5 shrink-0">
+                    <div class="flex items-center gap-2 overflow-x-auto no-scrollbar flex-1 mr-2" id="sticker-drawer-packs-tabs">
+                        <!-- Dynamic pack tabs -->
+                    </div>
+                    <div class="flex items-center gap-1 shrink-0">
+                        <button onclick="window.openStickerStudio()" class="w-8 h-8 rounded-full bg-pink-50 dark:bg-pink-900/30 text-pink-500 flex items-center justify-center btn-press" title="Sticker Studio">
+                            <i class="fas fa-plus text-xs"></i>
+                        </button>
+                        <button onclick="window.closeStickerDrawer()" class="w-8 h-8 rounded-full bg-gray-100 dark:bg-slate-800 text-gray-500 flex items-center justify-center btn-press">
+                            <i class="fas fa-times text-xs"></i>
+                        </button>
+                    </div>
+                </div>
+                <!-- 4x4 Sticker Grid container -->
+                <div class="flex-1 overflow-y-auto no-scrollbar p-3">
+                    <div id="sticker-drawer-grid" class="sticker-grid-4x4">
+                        <!-- Dynamic stickers load here in 4x4 -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- CHAT INPUT BAR WITH STICKER LOGO BUTTON -->
             <div id="chat-input-area" class="px-3 py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-gray-100 dark:border-white/5 flex items-end gap-2 shrink-0 z-20 pb-safe">
                 <div class="flex-1 bg-gray-100/80 dark:bg-slate-800/80 rounded-3xl flex items-end min-h-[44px] px-1 py-1 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
-                    <label class="w-9 h-9 rounded-full text-gray-400 hover:text-blue-500 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5">
-                        <i class="fas fa-plus text-lg"></i>
+                    <!-- File Attachment Button -->
+                    <label class="w-9 h-9 rounded-full text-gray-400 hover:text-blue-500 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5" title="Attach Media">
+                        <i class="fas fa-plus text-base"></i>
                         <input type="file" id="attachment-input" accept="image/*" class="hidden">
                     </label>
+
+                    <!-- NEW STICKER BUTTON IN INPUT BAR -->
+                    <button type="button" id="sticker-picker-btn" class="w-9 h-9 rounded-full text-gray-400 hover:text-pink-500 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5" onclick="window.toggleStickerDrawer()" title="Send Sticker">
+                        <i class="fas fa-icons text-base"></i>
+                    </button>
+
                     <textarea id="message-input" rows="1" placeholder="Message..." class="flex-1 bg-transparent border-none outline-none resize-none font-medium py-2.5 px-2 max-h-28 no-scrollbar placeholder-gray-400 text-[13px] text-gray-900 dark:text-white leading-snug"></textarea>
                 </div>
                 <button type="button" id="send-btn" class="hidden w-11 h-11 shrink-0 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 btn-press transition-all">
@@ -514,7 +575,7 @@
             </div>
         </div>
 
-        <!-- NEW CONTACT PROFILE OVERLAY (Z-INDEX 150) -->
+        <!-- NEW CONTACT PROFILE OVERLAY -->
         <div id="user-profile-overlay" class="fixed inset-0 z-[150] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
             <div class="px-3 py-3 glass-panel flex items-center justify-between shrink-0 sticky top-0 z-20 border-b border-gray-100 dark:border-white/5">
                 <button onclick="window.closeUserProfile()" class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-current btn-press">
@@ -583,7 +644,7 @@
                 </div>
             </div>
 
-            <!-- Tabbed Section (Posts, Media, Links) -->
+            <!-- Tabbed Section -->
             <div class="bg-white dark:bg-[#1e293b] rounded-t-3xl shadow-sm border border-gray-100 dark:border-white/5 flex-1 overflow-hidden flex flex-col pb-safe">
                 <div class="flex items-center justify-around border-b border-gray-100 dark:border-white/5 px-2 shrink-0">
                     <button class="flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all" id="tab-btn-posts" onclick="window.switchContactTab('posts')">Posts</button>
@@ -602,7 +663,7 @@
             </div>
         </div>
 
-        <!-- FULLSCREEN INSTAGRAM/WHATSAPP STORY VIEWER (CLEAN) -->
+        <!-- FULLSCREEN STORY VIEWER -->
         <div id="story-viewer-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-black text-white touch-none">
             <div class="absolute top-0 inset-x-0 z-10 px-3 pt-3 pb-6 bg-gradient-to-b from-black/80 to-transparent">
                 <div class="flex items-center justify-between">
@@ -667,7 +728,137 @@
             </div>
         </div>
 
-        <!-- NEW ADVANCED PROFILE COLOR PICKER OVERLAY (WITH ICONS DRAWER) -->
+        <!-- NEW FULLSCREEN STICKER STUDIO OVERLAY -->
+        <div id="sticker-studio-overlay" class="fixed inset-0 z-[180] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
+            <!-- Studio Header -->
+            <div class="px-4 py-3 flex items-center justify-between shrink-0 bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5">
+                <button onclick="window.closeStickerStudio()" class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-current btn-press">
+                    <i class="fas fa-arrow-left text-base"></i>
+                </button>
+                <div class="flex bg-gray-100 dark:bg-black/30 rounded-full p-1 border border-gray-200 dark:border-white/10">
+                    <button id="studio-tab-my" class="px-4 py-1.5 rounded-full bg-white dark:bg-white/20 text-xs font-bold text-gray-900 dark:text-white shadow-sm transition-all" onclick="window.switchStudioTab('my')">My Stickers</button>
+                    <button id="studio-tab-discover" class="px-4 py-1.5 rounded-full text-xs font-bold text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-all" onclick="window.switchStudioTab('discover')">Discover</button>
+                </div>
+                <button onclick="window.promptCreateStickerPack()" class="w-9 h-9 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md btn-press" title="Create New Pack">
+                    <i class="fas fa-plus text-xs"></i>
+                </button>
+            </div>
+
+            <!-- TAB 1: MY STICKERS VIEW -->
+            <div id="studio-my-view" class="flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <h3 class="text-base font-black">My Packs</h3>
+                        <p class="text-[11px] text-gray-400 font-medium">Create and manage your customized stickers</p>
+                    </div>
+                    <button onclick="window.promptCreateStickerPack()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm btn-press">
+                        <i class="fas fa-folder-plus text-[10px]"></i> Create Pack
+                    </button>
+                </div>
+
+                <!-- My Packs Grid / List -->
+                <div id="my-sticker-packs-list" class="flex flex-col gap-3">
+                    <!-- Dynamic Packs -->
+                </div>
+            </div>
+
+            <!-- TAB 2: DISCOVER STICKERS VIEW -->
+            <div id="studio-discover-view" class="hidden flex-1 overflow-y-auto no-scrollbar p-4 flex flex-col gap-4">
+                <div>
+                    <h3 class="text-base font-black">Community Stickers</h3>
+                    <p class="text-[11px] text-gray-400 font-medium">Browse and add packs created by other users</p>
+                </div>
+                <!-- Discover Packs List -->
+                <div id="discover-sticker-packs-list" class="flex flex-col gap-3">
+                    <!-- Dynamic Public Packs -->
+                </div>
+            </div>
+        </div>
+
+        <!-- STICKER PACK DETAIL VIEW MODAL -->
+        <div id="sticker-pack-detail-modal" class="fixed inset-0 z-[190] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
+            <div class="px-4 py-3 flex items-center justify-between shrink-0 bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5">
+                <button onclick="window.closeStickerPackDetail()" class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-current btn-press">
+                    <i class="fas fa-arrow-left text-base"></i>
+                </button>
+                <h3 class="font-bold text-sm truncate max-w-[200px]" id="pack-detail-title">Sticker Pack</h3>
+                <div class="flex items-center gap-1.5" id="pack-detail-actions">
+                    <!-- Make Sticker or Add/Remove pack -->
+                </div>
+            </div>
+            
+            <div class="flex-1 overflow-y-auto no-scrollbar p-4">
+                <div class="flex items-center justify-between mb-4">
+                    <span class="text-xs font-bold text-gray-400 uppercase tracking-wider" id="pack-detail-count">0 Stickers</span>
+                    <button id="pack-detail-make-btn" onclick="window.openStickerMakerModal()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold flex items-center gap-1 shadow-sm btn-press">
+                        <i class="fas fa-magic text-[10px]"></i> Make Sticker
+                    </button>
+                </div>
+
+                <!-- 4x4 Grid for Pack's Stickers -->
+                <div id="pack-detail-stickers-grid" class="sticker-grid-4x4">
+                    <!-- Dynamic 4x4 stickers -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 512x512 STICKER CANVAS MAKER MODAL -->
+        <div id="sticker-maker-modal" class="fixed inset-0 z-[220] hidden flex-col bg-slate-950 text-white">
+            <div class="px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0">
+                <button onclick="window.closeStickerMakerModal()" class="text-gray-400 hover:text-white text-xs font-bold">Cancel</button>
+                <div class="text-center">
+                    <h3 class="font-black text-xs">Sticker Maker</h3>
+                    <span class="text-[9px] text-gray-400 font-mono">512 × 512 PX</span>
+                </div>
+                <button onclick="window.saveCreatedSticker()" id="done-sticker-btn" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-black shadow-md btn-press">Done</button>
+            </div>
+
+            <!-- Canvas Viewport Center -->
+            <div class="flex-1 flex flex-col items-center justify-center p-4 overflow-hidden relative">
+                <div class="sticker-canvas-wrapper">
+                    <!-- Exact 512x512 canvas resolution -->
+                    <canvas id="sticker-draw-canvas" width="512" height="512"></canvas>
+                </div>
+                <span class="text-[10px] text-gray-400 mt-2 font-medium">Transparent canvas supported • Only Image/GIF (Max 5MB)</span>
+            </div>
+
+            <!-- Bottom Tool Controls -->
+            <div class="p-3 bg-slate-900 border-t border-white/10 flex flex-col gap-2 shrink-0 pb-safe">
+                <div class="flex items-center justify-between gap-2">
+                    <!-- Brush toggle -->
+                    <button onclick="window.toggleStickerBrush()" id="sticker-brush-btn" class="flex-1 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold flex items-center justify-center gap-1 btn-press">
+                        <i class="fas fa-paint-brush"></i> Brush
+                    </button>
+                    <!-- Text tool -->
+                    <button onclick="window.promptAddStickerText()" class="flex-1 py-2 rounded-xl bg-white/10 text-white text-xs font-bold flex items-center justify-center gap-1 btn-press">
+                        <i class="fas fa-font"></i> Text
+                    </button>
+                    <!-- Import Image/GIF (Strictly NO video, NO sound, Limit 5MB) -->
+                    <label class="flex-1 py-2 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-bold flex items-center justify-center gap-1 cursor-pointer btn-press text-center">
+                        <i class="fas fa-image"></i> Import
+                        <input type="file" id="sticker-import-file" accept="image/png, image/jpeg, image/webp, image/gif" class="hidden">
+                    </label>
+                    <!-- Clear -->
+                    <button onclick="window.clearStickerCanvas()" class="w-9 h-9 rounded-xl bg-red-500/20 text-red-400 flex items-center justify-center btn-press" title="Clear Canvas">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+
+                <!-- Palette & Brush Size -->
+                <div class="flex items-center justify-between gap-3 pt-1">
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] font-bold text-gray-400">Color:</span>
+                        <input type="color" id="sticker-brush-color" value="#3b82f6" class="w-7 h-7 rounded-lg border border-white/20 bg-transparent cursor-pointer">
+                    </div>
+                    <div class="flex-1 flex items-center gap-2 max-w-[180px]">
+                        <span class="text-[10px] font-bold text-gray-400">Size:</span>
+                        <input type="range" id="sticker-brush-size" min="2" max="40" value="8" class="flex-1 accent-blue-500">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW ADVANCED PROFILE COLOR PICKER (1 COLOR SOLID OR 2 COLORS GRADIENT) -->
         <div id="profile-color-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
             <div class="px-4 py-3 flex items-center justify-between shrink-0 bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5">
                 <button onclick="window.closeAdvancedColorPicker()" class="text-gray-500 dark:text-white text-xl p-1 btn-press"><i class="fas fa-arrow-left"></i></button>
@@ -690,22 +881,53 @@
                 <div class="p-4 -mt-6 relative z-20">
                     <div class="bg-white dark:bg-[#1e293b] rounded-[28px] p-5 shadow-lg border border-gray-100 dark:border-white/5 space-y-5">
                         
-                        <div class="grid grid-cols-7 gap-y-3 gap-x-2 justify-items-center" id="color-swatch-container">
-                            <button class="color-swatch w-7 h-7 rounded-full bg-blue-500" data-grad="from-blue-500 to-blue-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-green-500" data-grad="from-green-500 to-green-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-yellow-400" data-grad="from-yellow-300 to-yellow-400" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-orange-500" data-grad="from-orange-500 to-orange-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-red-500" data-grad="from-red-500 to-red-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-pink-500" data-grad="from-pink-500 to-pink-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-purple-500" data-grad="from-purple-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
+                        <!-- DUAL COLOR PICKER: 1 COLOR = DIRECT SOLID, 2 COLORS = GRADIENT -->
+                        <div class="space-y-3">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-extrabold uppercase text-gray-500 dark:text-gray-400">Custom Color Picker</span>
+                                <span class="text-[10px] text-blue-500 font-bold" id="custom-color-mode-label">1 Color = Solid, 2 = Gradient</span>
+                            </div>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-gray-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-gray-100 dark:border-white/5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[11px] font-bold text-gray-700 dark:text-gray-300">Color 1 (Main)</p>
+                                        <span class="text-[9px] text-gray-400" id="hex-1-display">#3b82f6</span>
+                                    </div>
+                                    <input type="color" id="custom-color-1" value="#3b82f6" class="w-8 h-8 rounded-full border-none cursor-pointer" onchange="window.updateDualCustomColor()">
+                                </div>
+                                <div class="bg-gray-50 dark:bg-slate-800/60 p-3 rounded-2xl border border-gray-100 dark:border-white/5 flex items-center justify-between">
+                                    <div>
+                                        <p class="text-[11px] font-bold text-gray-700 dark:text-gray-300">Color 2 (Gradient)</p>
+                                        <span class="text-[9px] text-gray-400" id="hex-2-display">Optional</span>
+                                    </div>
+                                    <div class="flex items-center gap-1.5">
+                                        <input type="color" id="custom-color-2" value="#8b5cf6" class="w-8 h-8 rounded-full border-none cursor-pointer" onchange="window.updateDualCustomColor()">
+                                        <button onclick="window.clearColor2()" class="text-gray-400 hover:text-red-500 text-xs p-1" title="Clear 2nd color for Solid"><i class="fas fa-times"></i></button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
 
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500" data-grad="from-blue-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500" data-grad="from-emerald-400 to-cyan-500" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-red-500" data-grad="from-rose-400 to-red-500" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500" data-grad="from-amber-400 to-orange-500" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" data-grad="from-purple-500 to-pink-500" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400" data-grad="from-indigo-500 to-cyan-400" onclick="window.selectLiveColor(this)"></button>
-                            <button class="color-swatch w-7 h-7 rounded-full bg-gray-600" data-grad="" onclick="window.selectLiveColor(this)"></button>
+                        <!-- PRESET PALETTES -->
+                        <div class="border-t border-gray-100 dark:border-white/10 pt-4">
+                            <span class="text-[11px] font-bold text-gray-500 dark:text-gray-400 uppercase block mb-3">Quick Presets</span>
+                            <div class="grid grid-cols-7 gap-y-3 gap-x-2 justify-items-center" id="color-swatch-container">
+                                <button class="color-swatch w-7 h-7 rounded-full bg-blue-500" data-grad="from-blue-500 to-blue-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-green-500" data-grad="from-green-500 to-green-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-yellow-400" data-grad="from-yellow-300 to-yellow-400" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-orange-500" data-grad="from-orange-500 to-orange-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-red-500" data-grad="from-red-500 to-red-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-pink-500" data-grad="from-pink-500 to-pink-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-purple-500" data-grad="from-purple-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
+
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500" data-grad="from-blue-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500" data-grad="from-emerald-400 to-cyan-500" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-red-500" data-grad="from-rose-400 to-red-500" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500" data-grad="from-amber-400 to-orange-500" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" data-grad="from-purple-500 to-pink-500" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400" data-grad="from-indigo-500 to-cyan-400" onclick="window.selectLiveColor(this)"></button>
+                                <button class="color-swatch w-7 h-7 rounded-full bg-gray-600" data-grad="" onclick="window.selectLiveColor(this)"></button>
+                            </div>
                         </div>
 
                         <!-- CUSTOM TICK COLOR SELECTION -->
@@ -755,13 +977,13 @@
             </div>
         </div>
 
-        <!-- APP CONFIRM ALERTS (Replaces window.confirm) -->
+        <!-- APP CONFIRM ALERTS -->
         <div id="custom-alert-container"></div>
         <div id="modals-container"></div>
 
     </div>
 
-    <!-- NEW SECURE INJECTION SCRIPT AREA -->
+    <!-- SECURE LOADER SCRIPT -->
     <script>
         (async function() {
             try {
@@ -791,7 +1013,7 @@
             }
         })();
 
-        // GLOBAL UI CONFIRM (Replaces default confirm box)
+        // GLOBAL UI CONFIRM
         window.appConfirm = function(message, onConfirm) {
             const container = document.getElementById('custom-alert-container');
             if (!container) return;
