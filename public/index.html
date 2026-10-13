@@ -33,828 +33,735 @@
     </script>
     
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- LINK STYLE.CSS HIDDEN - INJECTED VIA JS SECURELY -->
 </head>
 <body class="bg-[#090d16]">
 
-    <!-- APP CONTAINER (Wrapped everything strictly so blocked users can't F12 it) -->
-    <div id="secure-app-wrapper" class="w-full h-full">
-
-        <!-- ANIMATED MAINTENANCE OVERLAY -->
-        <div id="maintenance-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-[#090d16] text-white">
-            <div class="relative w-32 h-32 mb-8">
-                <i class="fas fa-cog text-6xl text-blue-500 absolute top-0 left-2 animate-[spin_4s_linear_infinite]"></i>
-                <i class="fas fa-cog text-4xl text-blue-400 absolute bottom-2 right-2 animate-[spin_3s_linear_infinite_reverse]"></i>
-            </div>
-            <h1 class="text-3xl font-black mb-2 animate-pulse">System Upgrade</h1>
-            <p class="text-gray-400 text-sm max-w-xs text-center leading-relaxed">Chatrix is currently undergoing scheduled maintenance to improve your experience. We'll be back online shortly!</p>
+    <!-- ANIMATED MAINTENANCE OVERLAY -->
+    <div id="maintenance-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center justify-center bg-[#090d16] text-white">
+        <div class="relative w-32 h-32 mb-8">
+            <i class="fas fa-cog text-6xl text-blue-500 absolute top-0 left-2 animate-[spin_4s_linear_infinite]"></i>
+            <i class="fas fa-cog text-4xl text-blue-400 absolute bottom-2 right-2 animate-[spin_3s_linear_infinite_reverse]"></i>
         </div>
-
-        <!-- NEW DYNAMIC BANNED SCREEN (With Reason & Timer) -->
-        <div id="banned-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center bg-[#090d16] text-white p-6 pt-16 overflow-y-auto">
-            <img id="banned-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full border-[3px] border-red-500 mb-4 shadow-[0_0_40px_rgba(239,68,68,0.3)] object-cover">
-            <h1 id="banned-name" class="text-xl font-black mb-0.5">User Name</h1>
-            <p id="banned-username" class="text-xs text-red-400 font-bold mb-6">@username</p>
-            
-            <div class="bg-red-500/10 border border-red-500/20 p-5 rounded-3xl text-center max-w-sm w-full mb-6">
-                <i class="fas fa-ban text-4xl text-red-500 mb-3 drop-shadow-md"></i>
-                <h2 class="text-base font-bold mb-2 text-red-50" id="banned-title-msg">Access Restricted</h2>
-                <p class="text-xs text-red-200 leading-relaxed mb-4 font-semibold" id="banned-reason-msg">Your account is restricted due to suspicious activity.</p>
-                
-                <div class="bg-black/40 p-3 rounded-xl border border-white/5 mb-3 hidden" id="ban-timer-box">
-                    <p class="text-[10px] text-gray-400 uppercase font-bold mb-1">Time Remaining</p>
-                    <p class="text-lg font-mono font-black text-red-400" id="ban-countdown">00:00:00</p>
-                </div>
-
-                <p class="text-[10px] text-gray-400 leading-relaxed font-medium">Data fetching has been blocked. F12 or bypass attempts are disabled securely.</p>
-            </div>
-            
-            <button onclick="document.getElementById('appeal-modal').classList.remove('hidden'); document.getElementById('appeal-modal').style.display='flex';" class="w-full max-w-sm py-3.5 bg-white text-black rounded-2xl font-black text-sm shadow-lg hover:scale-95 transition-transform btn-press" id="ban-appeal-btn">Request a Review</button>
-        </div>
-
-        <!-- APPEAL MODAL -->
-        <div id="appeal-modal" class="fixed inset-0 z-[10000] hidden flex-col justify-end bg-black/80 backdrop-blur-sm">
-            <div class="bg-[#1e293b] p-6 rounded-t-3xl w-full border-t border-white/10 shadow-2xl">
-                <div class="flex justify-between items-center mb-4">
-                    <h3 class="font-bold text-lg text-white">Appeal Suspension</h3>
-                    <button onclick="document.getElementById('appeal-modal').classList.add('hidden')" class="text-gray-400 p-2"><i class="fas fa-times text-xl"></i></button>
-                </div>
-                <p class="text-xs text-gray-400 mb-4 font-medium">Please explain in detail why your account should be reinstated. (Minimum 25 words required)</p>
-                <textarea id="appeal-text" rows="5" class="w-full bg-[#0f172a] border border-white/10 rounded-xl p-4 text-sm text-white focus:border-blue-500 outline-none transition-all placeholder-gray-600" placeholder="Type your reason here..."></textarea>
-                
-                <div class="flex justify-between items-center mt-3 mb-6">
-                    <span id="word-count" class="text-xs text-red-400 font-bold transition-colors">0 / 25 words</span>
-                </div>
-                <button id="submit-appeal-btn" disabled class="w-full py-4 bg-blue-600/30 text-white/50 rounded-xl font-bold transition-all cursor-not-allowed border border-transparent">Submit Appeal Request</button>
-            </div>
-        </div>
-
-        <script>
-            const appealText = document.getElementById('appeal-text');
-            const wordCount = document.getElementById('word-count');
-            const submitBtn = document.getElementById('submit-appeal-btn');
-
-            appealText.addEventListener('input', () => {
-                const words = appealText.value.trim().split(/\s+/).filter(w => w.length > 0).length;
-                wordCount.innerText = `${words} / 25 words`;
-                
-                if (words >= 25) {
-                    wordCount.classList.remove('text-red-400');
-                    wordCount.classList.add('text-emerald-400');
-                    submitBtn.disabled = false;
-                    submitBtn.classList.remove('bg-blue-600/30', 'text-white/50', 'cursor-not-allowed');
-                    submitBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-lg');
-                } else {
-                    wordCount.classList.add('text-red-400');
-                    wordCount.classList.remove('text-emerald-400');
-                    submitBtn.disabled = true;
-                    submitBtn.classList.add('bg-blue-600/30', 'text-white/50', 'cursor-not-allowed');
-                    submitBtn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-lg');
-                }
-            });
-
-            document.getElementById('submit-appeal-btn').onclick = async () => {
-                if(submitBtn.disabled) return;
-                const text = appealText.value;
-                if (window.submitBanAppeal) {
-                    await window.submitBanAppeal(text);
-                }
-            };
-        </script>
-        
-        <!-- APP CONTAINER MAIN SHELL -->
-        <div class="app-container" id="app">
-
-            <!-- SPLASH SCREEN (NEW ANIMATION) -->
-            <div id="splash-screen" class="absolute inset-0 z-[500] bg-white dark:bg-slate-900 flex flex-col items-center justify-center transition-opacity duration-300">
-                <div class="relative w-32 h-32 mb-6 flex items-center justify-center">
-                    <div class="absolute inset-0 rounded-full bg-blue-500/20 animate-ping"></div>
-                    <div class="absolute inset-4 rounded-full bg-blue-500/40 animate-pulse"></div>
-                    <div class="relative z-10 w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl shadow-[0_0_30px_rgba(59,130,246,0.6)] flex items-center justify-center animate-bounce">
-                        <i class="fas fa-comment-dots text-4xl text-white"></i>
-                    </div>
-                </div>
-                <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 tracking-tight drop-shadow-sm">Chatrix</h1>
-                <p class="text-xs text-gray-400 mt-2 font-semibold tracking-widest uppercase">Secure Engine</p>
-            </div>
-
-            <div id="toast" class="absolute top-4 left-1/2 transform -translate-x-1/2 -translate-y-[200%] transition-transform duration-300 z-[250] bg-gray-900 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2">
-                <span id="toast-icon"></span>
-                <span id="toast-msg">Notification</span>
-            </div>
-
-            <!-- AUTH: LOGIN VIEW -->
-            <div id="login-view" class="view-layer view-hidden justify-center px-8 bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-slate-950">
-                <div class="text-center mb-8">
-                    <h1 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Welcome Back</h1>
-                    <p class="text-gray-500 text-sm mt-1 font-medium">Log in to Chatrix</p>
-                </div>
-                <form id="login-form" class="space-y-4">
-                    <input type="text" id="login-username" required placeholder="Username (e.g. syroxzen)" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                    <input type="password" id="login-password" required placeholder="Password" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                    <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg transition-all btn-press">Sign In</button>
-                </form>
-                <div class="mt-6 text-center">
-                    <p class="text-sm font-medium text-gray-500">New here? <a href="#" id="go-to-signup" class="text-blue-600 font-bold hover:underline">Create an account</a></p>
-                </div>
-                <div id="login-error" class="mt-4 text-red-500 text-xs font-medium text-center hidden p-3 bg-red-50 dark:bg-red-950/40 rounded-xl"></div>
-            </div>
-
-            <!-- AUTH: SIGNUP VIEW -->
-            <div id="signup-view" class="view-layer view-hidden py-8 px-8 overflow-y-auto no-scrollbar bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-slate-950">
-                <div class="text-center mb-6 pt-2">
-                    <h1 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Join Chatrix</h1>
-                    <p class="text-gray-500 text-sm mt-0.5 font-medium">Create your private identity</p>
-                </div>
-                <form id="signup-form" class="space-y-4 flex-1 pb-8">
-                    <div class="flex justify-center mb-4">
-                        <div class="relative btn-press">
-                            <div class="w-20 h-20 rounded-full bg-white dark:bg-slate-800 border-2 border-dashed border-blue-400 flex items-center justify-center overflow-hidden cursor-pointer shadow-md" id="dp-preview-container">
-                                <i class="fas fa-camera text-blue-500 text-xl" id="dp-icon"></i>
-                                <img id="dp-preview" class="w-full h-full object-cover hidden" alt="DP Preview">
-                            </div>
-                            <input type="file" id="signup-dp" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
-                        </div>
-                    </div>
-                    <input type="text" id="signup-name" required placeholder="Full Name" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                    <input type="text" id="signup-username" required placeholder="Username (no spaces)" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                    <input type="password" id="signup-password" required placeholder="Password" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
-                    <button type="submit" class="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg btn-press">Create Account</button>
-                </form>
-                <div class="text-center pb-4">
-                    <p class="text-sm font-medium text-gray-500">Already a member? <a href="#" id="go-to-login" class="text-blue-600 font-bold hover:underline">Log in</a></p>
-                </div>
-                <div id="signup-error" class="mt-2 text-red-500 text-xs font-medium text-center hidden p-3 bg-red-50 dark:bg-red-950/40 rounded-xl"></div>
-            </div>
-
-            <!-- MAIN APPLICATION SHELL -->
-            <div id="main-app" class="view-layer view-hidden flex-col">
-                <div class="flex-1 relative overflow-hidden pb-[60px]">
-
-                    <!-- TAB 1: CHATS -->
-                    <div id="home-tab" class="tab-layer tab-visible flex flex-col">
-                        <div class="px-5 py-3.5 flex flex-col glass-panel shrink-0 sticky top-0 z-10 border-b-0 pb-0">
-                            <div id="normal-header" class="flex items-center mb-2">
-                                <div class="text-2xl font-black flex-1 tracking-tight text-gray-900 dark:text-white">Chatrix</div>
-                                <button class="w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 flex items-center justify-center text-gray-700 dark:text-gray-300 btn-press" onclick="window.openSearchOverlay()">
-                                    <i class="fas fa-search text-xs"></i>
-                                </button>
-                            </div>
-                            <div id="selection-toolbar" class="hidden flex items-center justify-between py-2 border-b border-gray-200 dark:border-slate-700 mb-2">
-                                <div class="flex items-center gap-3">
-                                    <button onclick="window.exitSelectionMode()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400"><i class="fas fa-times text-base"></i></button>
-                                    <span id="selection-count" class="font-bold text-xs text-gray-900 dark:text-white">0 Selected</span>
-                                </div>
-                                <div class="flex items-center gap-2" id="selection-actions"></div>
-                            </div>
-                            <div class="flex items-center overflow-x-auto no-scrollbar gap-4 mt-1 pb-2" id="folder-tabs-container">
-                                <button class="folder-tab active text-xs text-gray-500 py-1" onclick="window.selectFolder('All', this)">All Chats</button>
-                            </div>
-                        </div>
-                        <div class="flex-1 overflow-y-auto no-scrollbar pb-28 relative" id="chat-list"></div>
-                    </div>
-
-                    <!-- TAB 2: STORIES -->
-                    <div id="stories-tab" class="tab-layer tab-hidden flex flex-col">
-                        <div class="px-5 py-3.5 flex items-center justify-between glass-panel shrink-0 sticky top-0 z-10">
-                            <h2 class="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Stories</h2>
-                            <button onclick="window.openStoryEditor()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-md btn-press">
-                                <i class="fas fa-plus text-[10px]"></i> Add Story
-                            </button>
-                        </div>
-                        <div class="flex-1 overflow-y-auto no-scrollbar p-4 pb-28 space-y-4" id="stories-feed-container"></div>
-                    </div>
-
-                    <!-- TAB 3: SETTINGS -->
-                    <div id="settings-tab" class="tab-layer tab-hidden flex flex-col">
-                        <div class="px-6 py-4 flex items-center justify-between glass-panel shrink-0 sticky top-0 z-10">
-                            <h2 class="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Settings</h2>
-                            <button class="w-8 h-8 rounded-full flex items-center justify-center text-current opacity-70 hover:opacity-100 btn-press text-gray-900 dark:text-white" onclick="window.openAppearanceModal()">
-                                <i class="fas fa-ellipsis-v"></i>
-                            </button>
-                        </div>
-
-                        <div class="flex-1 overflow-y-auto no-scrollbar px-5 pt-3 pb-28 flex flex-col gap-4">
-                            <div id="settings-header-bg" class="relative overflow-hidden flex flex-col items-center pt-2 rounded-3xl p-4 transition-all duration-300 shrink-0 bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5">
-                                <div id="settings-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none text-2xl flex flex-wrap gap-6 p-4 justify-around"></div>
-                                <img id="settings-top-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full object-cover shadow-md border-2 border-white ring-2 ring-gray-100 dark:ring-slate-700 bg-white relative z-10">
-                                <h2 class="text-xl font-extrabold flex items-center gap-1.5 mt-3 text-gray-900 dark:text-white relative z-10" id="settings-top-name">User</h2>
-                                <p class="text-gray-400 text-xs font-medium mt-0.5 relative z-10" id="settings-top-username">@username</p>
-                            </div>
-
-                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.switchTab('profile')">
-                                    <div class="w-7 text-center text-gray-400 text-base"><i class="fas fa-user"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Account</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                
-                                <!-- NEW STICKER STUDIO BUTTON -->
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openStickerStudio()">
-                                    <div class="w-7 text-center text-pink-500 text-base"><i class="fas fa-sticky-note"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Sticker Studio</span>
-                                    <span class="text-[9px] bg-pink-100 text-pink-600 font-black px-2 py-0.5 rounded-full mr-2">NEW</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openAppearanceModal()">
-                                    <div class="w-7 text-center text-purple-400 text-base"><i class="fas fa-palette"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Appearance</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openFolderManagerModal()">
-                                    <div class="w-7 text-center text-blue-400 text-base"><i class="fas fa-folder"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Chat Folders</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" onclick="window.openArchivedChatsModal()">
-                                    <div class="w-7 text-center text-emerald-500 text-base"><i class="fas fa-archive"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Archived Chats</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                            </div>
-                            
-                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openAdvancedColorPicker()">
-                                    <div class="w-7 text-center text-amber-500 text-base"><i class="fas fa-brush"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Profile Colors</span>
-                                    <span class="text-[9px] bg-amber-100 text-amber-700 font-black px-2 py-0.5 rounded-full mr-2">VIP</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" id="premium-btn-action">
-                                    <div class="w-7 text-center text-blue-500 text-base"><i class="fas fa-star"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Chatrix Premium</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                            </div>
-
-                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openChangePasswordModal()">
-                                    <div class="w-7 text-center text-indigo-500 text-base"><i class="fas fa-key"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Change Password</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openActiveDevicesModal()">
-                                    <div class="w-7 text-center text-teal-500 text-base"><i class="fas fa-mobile-alt"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Active Devices</span>
-                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" onclick="window.contactSupportInApp()">
-                                    <div class="w-7 text-center text-sky-500 text-base"><i class="fas fa-headset"></i></div>
-                                    <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Contact Support</span>
-                                    <i class="fas fa-comment-dots text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                </button>
-                            </div>
-
-                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-red-100 dark:border-red-900/50 overflow-hidden shrink-0">
-                                <button class="flex items-center px-5 py-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 border-b border-red-50 dark:border-red-900/50 btn-press text-left w-full text-red-500" onclick="window.handleLogout()">
-                                    <div class="w-7 text-center text-base"><i class="fas fa-sign-out-alt"></i></div>
-                                    <span class="ml-3 flex-1 font-bold text-xs">Log Out</span>
-                                </button>
-                                <button class="flex items-center px-5 py-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 btn-press text-left w-full text-red-500" onclick="window.confirmDeleteAccount()">
-                                    <div class="w-7 text-center text-base"><i class="fas fa-trash-alt"></i></div>
-                                    <span class="ml-3 flex-1 font-bold text-xs">Delete Account</span>
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- TAB 4: PROFILE -->
-                    <div id="profile-tab" class="tab-layer tab-hidden flex flex-col">
-                        <div class="px-4 py-3 flex items-center justify-between shrink-0 sticky top-0 z-20 glass-panel border-b border-gray-100 dark:border-white/5">
-                            <button class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-gray-900 dark:text-white" onclick="window.switchTab('settings')">
-                                <i class="fas fa-arrow-left text-base"></i>
-                            </button>
-                            <h2 class="text-base font-bold text-gray-900 dark:text-white">Profile</h2>
-                            <div class="flex items-center gap-1">
-                                <button class="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-amber-500" onclick="window.openAdvancedColorPicker()" title="Customize Style">
-                                    <i class="fas fa-paint-brush text-sm"></i>
-                                </button>
-                                <button class="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-gray-900 dark:text-white" onclick="window.openModernEditModal('name')">
-                                    <i class="fas fa-pen text-xs"></i>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="flex-1 overflow-y-auto no-scrollbar pb-28">
-                            <div id="my-profile-header-bg" class="relative overflow-hidden bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-transparent px-6 pt-6 pb-8 transition-all duration-300">
-                                <div id="my-profile-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
-                                <div class="relative z-10 flex flex-col items-center">
-                                    <div class="relative group">
-                                        <img id="profile-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full object-cover shadow-xl border-4 border-white dark:border-white/10 ring-2 ring-gray-200 dark:ring-slate-700 bg-white">
-                                        <label class="absolute bottom-1 right-1 bg-blue-600 hover:bg-blue-700 text-white w-7 h-7 rounded-full flex items-center justify-center text-[11px] cursor-pointer shadow-md transition-all btn-press">
-                                            <i class="fas fa-camera"></i>
-                                            <input type="file" id="change-dp-input" accept="image/*" class="hidden">
-                                        </label>
-                                    </div>
-                                    <h2 class="text-xl font-black flex items-center gap-1.5 mt-3 tracking-tight text-gray-900 dark:text-white" id="profile-name">User</h2>
-                                    <p class="text-emerald-500 font-semibold text-[11px] mt-0.5 flex items-center gap-1">
-                                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> online
-                                    </p>
-                                </div>
-                            </div>
-
-                            <div class="p-5 -mt-3 relative z-10 space-y-4">
-                                <div class="grid grid-cols-3 gap-2">
-                                    <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.openAdvancedColorPicker()">
-                                        <i class="fas fa-palette text-amber-500 text-base mb-1"></i>
-                                        <span class="text-[10px] font-bold text-gray-900 dark:text-white">Style</span>
-                                    </button>
-                                    <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.openModernEditModal('name')">
-                                        <i class="fas fa-user-edit text-blue-500 text-base mb-1"></i>
-                                        <span class="text-[10px] font-bold text-gray-900 dark:text-white">Edit Info</span>
-                                    </button>
-                                    <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.switchTab('settings')">
-                                        <i class="fas fa-cog text-purple-500 text-base mb-1"></i>
-                                        <span class="text-[10px] font-bold text-gray-900 dark:text-white">Settings</span>
-                                    </button>
-                                </div>
-
-                                <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden divide-y divide-gray-50 dark:divide-white/5">
-                                    <div class="px-5 py-3.5 flex items-start cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.openModernEditModal('bio')">
-                                        <div class="w-7 text-gray-400 text-sm pt-0.5"><i class="fas fa-quote-left"></i></div>
-                                        <div class="flex-1">
-                                            <p class="font-medium text-xs leading-snug text-gray-900 dark:text-white" id="profile-bio-display">Trust once lost is never found again.</p>
-                                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Bio</p>
-                                        </div>
-                                        <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px] self-center"></i>
-                                    </div>
-                                    <div class="px-5 py-3.5 flex items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.openModernEditModal('username')">
-                                        <div class="w-7 text-gray-400 text-sm"><i class="fas fa-at"></i></div>
-                                        <div class="flex-1">
-                                            <p class="font-bold text-xs leading-tight text-gray-900 dark:text-white" id="profile-username-display">@username</p>
-                                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Username</p>
-                                        </div>
-                                        <i class="fas fa-copy text-gray-300 dark:text-gray-600 text-xs" onclick="event.stopPropagation(); window.copyToClipboard(window.currentUser.username);"></i>
-                                    </div>
-                                    <div class="px-5 py-3.5 flex items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.promptEditBirthday()">
-                                        <div class="w-7 text-gray-400 text-sm"><i class="fas fa-birthday-cake"></i></div>
-                                        <div class="flex-1">
-                                            <p class="font-bold text-xs leading-tight text-gray-900 dark:text-white" id="profile-birthday-display">Add Birthday</p>
-                                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Birthday</p>
-                                        </div>
-                                        <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
-                                    </div>
-                                </div>
-
-                                <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden p-4">
-                                    <div class="flex items-center justify-between mb-3 border-b border-gray-100 dark:border-white/5 pb-2">
-                                        <h3 class="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
-                                            <i class="fas fa-layer-group text-blue-500"></i> Posts History
-                                        </h3>
-                                        <button onclick="window.openStoryEditor()" class="px-3 py-1 bg-blue-600 text-white rounded-xl text-[11px] font-bold btn-press shadow-sm flex items-center gap-1">
-                                            <i class="fas fa-plus text-[9px]"></i> Add Post
-                                        </button>
-                                    </div>
-                                    <div id="my-profile-posts-grid" class="grid grid-cols-2 gap-2.5 min-h-[100px]"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- BOTTOM NAVIGATION -->
-                <div class="absolute bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-white/5 flex justify-around items-center py-2 z-20 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.03)] dark:shadow-none" id="bottom-navbar">
-                    <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="home" onclick="window.switchTab('home')">
-                        <i class="fas fa-comment-dots text-lg mb-1 transition-all"></i>
-                        <span class="text-[10px] font-bold">Chats</span>
-                    </button>
-                    <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="stories" onclick="window.switchTab('stories')">
-                        <i class="fas fa-circle-notch text-lg mb-1 transition-all"></i>
-                        <span class="text-[10px] font-bold">Stories</span>
-                    </button>
-                    <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="settings" onclick="window.switchTab('settings')">
-                        <i class="fas fa-cog text-lg mb-1 transition-all"></i>
-                        <span class="text-[10px] font-bold">Settings</span>
-                    </button>
-                    <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="profile" onclick="window.switchTab('profile')">
-                        <i class="fas fa-user text-lg mb-1 transition-all"></i>
-                        <span class="text-[10px] font-bold">Profile</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- SEARCH OVERLAY -->
-            <div id="search-view" class="fixed inset-0 z-50 hidden flex flex-col bg-white dark:bg-[#0f172a]">
-                <div class="px-2 py-3 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 gap-2 border-b border-gray-100 dark:border-white/5">
-                    <button onclick="window.closeSearchOverlay()" class="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-900 dark:text-white btn-press">
-                        <i class="fas fa-arrow-left text-base"></i>
-                    </button>
-                    <div class="flex-1 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center px-3.5 py-2 mr-2 focus-within:ring-2 focus-within:ring-blue-400 transition-all">
-                        <i class="fas fa-search text-gray-400 mr-2 text-sm"></i>
-                        <input type="text" id="global-search-input" placeholder="Search users by name or username..." class="flex-1 bg-transparent border-none outline-none font-medium text-sm placeholder:text-gray-400 text-gray-900 dark:text-white">
-                        <button id="clear-search-btn" class="hidden text-gray-400 hover:text-gray-600 btn-press"><i class="fas fa-times-circle text-sm"></i></button>
-                    </div>
-                </div>
-                <div class="flex-1 overflow-y-auto no-scrollbar pt-2 bg-white dark:bg-[#0f172a]">
-                    <div id="search-history-header" class="px-5 py-2 flex justify-between items-center">
-                        <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Searches</span>
-                        <button id="clear-history-btn" class="text-xs font-bold text-blue-500 hover:text-blue-700 btn-press">CLEAR</button>
-                    </div>
-                    <div id="search-results-list" class="flex flex-col pb-4"></div>
-                </div>
-            </div>
-
-            <!-- CHAT SCREEN -->
-            <div id="chat-screen" class="fixed inset-0 z-[100] hidden flex flex-col bg-white dark:bg-[#0f172a] h-[100dvh] max-h-[100dvh] overflow-hidden">
-                <div class="px-2 py-2 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 border-b border-gray-100 dark:border-white/5 z-20">
-                    <button id="back-from-chat" class="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-900 dark:text-white mr-1 btn-press">
-                        <i class="fas fa-arrow-left text-base"></i>
-                    </button>
-                    <div class="flex flex-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 rounded-full pr-3 pl-1 py-1 transition-colors btn-press" onclick="window.openChatHeaderTarget()">
-                        <img id="active-chat-dp" src="https://placehold.co/100" class="w-9 h-9 rounded-full object-cover mr-2.5 shadow-sm border border-gray-100 dark:border-white/10 bg-white">
-                        <div class="flex-1 min-w-0 pr-2">
-                            <h3 class="font-extrabold truncate tracking-tight text-sm leading-tight flex items-center gap-1 text-gray-900 dark:text-white" id="active-chat-name">Name</h3>
-                            <p class="text-[11px] text-blue-500 font-semibold truncate" id="active-chat-status">Connecting...</p>
-                        </div>
-                    </div>
-                    <div class="flex items-center text-gray-600 dark:text-gray-300 gap-1 ml-2" id="chat-header-actions">
-                        <button class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center btn-press text-blue-600" onclick="window.initiateVoiceCall()"><i class="fas fa-phone-alt text-xs"></i></button>
-                        <div class="relative">
-                            <button id="chat-menu-btn" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center btn-press text-current" onclick="window.toggleChatMenu(event)"><i class="fas fa-ellipsis-v text-xs"></i></button>
-                            <div id="chat-menu-dropdown" class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl py-2 hidden border border-gray-100 dark:border-white/10 z-50"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- E2E ENCRYPTION NOTICE (WHATSAPP STYLE) -->
-                <div class="w-full flex justify-center pt-3 pb-1 shrink-0 bg-transparent z-10 relative">
-                    <div class="bg-[#FFF8DD] dark:bg-yellow-900/20 text-[#856404] dark:text-yellow-500 text-[10px] font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm border border-[#FFEeba] dark:border-yellow-700/30 text-center max-w-[85%] mx-auto backdrop-blur-sm">
-                        <i class="fas fa-lock text-[9px]"></i> <span>Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.</span>
-                    </div>
-                </div>
-
-                <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3.5 pb-3.5 pt-1 flex flex-col gap-2.5 chat-bg relative z-0" id="messages-container"></div>
-
-                <div id="reply-preview-bar" class="hidden px-4 py-1.5 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-white/10 flex items-center justify-between text-xs shrink-0">
-                    <div class="flex items-center gap-2 border-l-2 border-blue-500 pl-2 min-w-0">
-                        <div class="flex flex-col min-w-0">
-                            <span class="font-bold text-blue-600 text-[10px]" id="reply-to-user">Replying</span>
-                            <span class="text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-[240px]" id="reply-to-text">Preview...</span>
-                        </div>
-                    </div>
-                    <button onclick="window.cancelReply()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"><i class="fas fa-times text-xs"></i></button>
-                </div>
-
-                <!-- CHAT INPUT BAR WITH NEW STICKER BUTTON -->
-                <div id="chat-input-area" class="px-3 py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-gray-100 dark:border-white/5 flex items-end gap-2 shrink-0 z-20 pb-safe relative">
-                    
-                    <!-- INLINE STICKER POPUP DRAWER -->
-                    <div id="chat-sticker-drawer" class="absolute bottom-full left-3 w-64 h-64 bg-white dark:bg-slate-800 border border-gray-200 dark:border-white/10 rounded-2xl shadow-2xl hidden flex-col overflow-hidden mb-2">
-                        <div class="flex items-center justify-between px-3 py-2 bg-gray-50 dark:bg-slate-900 border-b border-gray-100 dark:border-white/5 shrink-0">
-                            <span class="text-xs font-bold text-gray-900 dark:text-white">Your Stickers</span>
-                            <button class="text-gray-400 hover:text-gray-600 btn-press" onclick="window.toggleChatStickerDrawer()"><i class="fas fa-times"></i></button>
-                        </div>
-                        <div id="chat-sticker-grid" class="flex-1 p-2 grid grid-cols-4 gap-2 overflow-y-auto no-scrollbar content-start">
-                            <!-- Stickers injected here -->
-                        </div>
-                    </div>
-
-                    <div class="flex-1 bg-gray-100/80 dark:bg-slate-800/80 rounded-3xl flex items-end min-h-[44px] px-1 py-1 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
-                        <button type="button" class="w-9 h-9 rounded-full text-pink-500 hover:text-pink-600 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5" onclick="window.toggleChatStickerDrawer()">
-                            <i class="fas fa-sticky-note text-lg"></i>
-                        </button>
-                        <textarea id="message-input" rows="1" placeholder="Message..." class="flex-1 bg-transparent border-none outline-none resize-none font-medium py-2.5 px-2 max-h-28 no-scrollbar placeholder-gray-400 text-[13px] text-gray-900 dark:text-white leading-snug"></textarea>
-                        <label class="w-9 h-9 rounded-full text-gray-400 hover:text-blue-500 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5 ml-1">
-                            <i class="fas fa-plus text-lg"></i>
-                            <input type="file" id="attachment-input" accept="image/*" class="hidden">
-                        </label>
-                    </div>
-                    <button type="button" id="send-btn" class="hidden w-11 h-11 shrink-0 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 btn-press transition-all">
-                        <i class="fas fa-paper-plane text-sm transform -translate-x-0.5"></i>
-                    </button>
-                    <button type="button" id="mic-btn" class="w-11 h-11 shrink-0 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 btn-press transition-all">
-                        <i class="fas fa-microphone text-sm"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- NEW CONTACT PROFILE OVERLAY (Z-INDEX 150) -->
-            <div id="user-profile-overlay" class="fixed inset-0 z-[150] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
-                <div class="px-3 py-3 glass-panel flex items-center justify-between shrink-0 sticky top-0 z-20 border-b border-gray-100 dark:border-white/5">
-                    <button onclick="window.closeUserProfile()" class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-current btn-press">
-                        <i class="fas fa-arrow-left text-base"></i>
-                    </button>
-                    <h2 class="text-base font-bold">Contact Details</h2>
-                    <div class="w-9"></div>
-                </div>
-
-                <div id="overlay-profile-header-bg" class="relative overflow-hidden bg-white dark:bg-[#1e293b] px-6 pt-6 pb-8 transition-all duration-300 shrink-0">
-                    <div id="overlay-profile-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
-                    <div class="relative z-10 flex flex-col items-center">
-                        <img id="overlay-profile-dp" src="" class="w-24 h-24 rounded-full object-cover shadow-xl border-4 border-white/40 ring-2 ring-gray-200 dark:ring-slate-700 bg-white">
-                        <h2 class="text-xl font-black flex items-center gap-1.5 mt-3 tracking-tight" id="overlay-profile-name">Name</h2>
-                        <p class="text-blue-500 font-semibold text-[11px] mt-0.5" id="overlay-profile-status-text">online</p>
-                    </div>
-                </div>
-
-                <!-- Profile Actions -->
-                <div class="px-5 py-4 -mt-3 relative z-10 bg-transparent shrink-0">
-                    <div class="grid grid-cols-4 gap-2">
-                        <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.closeUserProfile()">
-                            <i class="fas fa-comment-dots text-blue-500 text-base mb-1"></i>
-                            <span class="text-[10px] font-bold">Message</span>
-                        </button>
-                        <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.showToast('Notifications Muted')">
-                            <i class="fas fa-bell-slash text-amber-500 text-base mb-1"></i>
-                            <span class="text-[10px] font-bold">Mute</span>
-                        </button>
-                        <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.initiateVoiceCall(); window.closeUserProfile();">
-                            <i class="fas fa-phone-alt text-green-500 text-base mb-1"></i>
-                            <span class="text-[10px] font-bold">Call</span>
-                        </button>
-                        <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.switchContactTab('links')">
-                            <i class="fas fa-link text-purple-500 text-base mb-1"></i>
-                            <span class="text-[10px] font-bold">Links</span>
-                        </button>
-                    </div>
-                </div>
-
-                <!-- User Info Block -->
-                <div class="px-5 shrink-0 mb-4">
-                    <div id="overlay-bio-card" class="bg-white dark:bg-[#1e293b] rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden divide-y divide-gray-50 dark:divide-white/5">
-                        <div class="px-5 py-3.5 flex items-start" id="overlay-bio-row">
-                            <div class="w-7 text-gray-400 text-sm pt-0.5"><i class="fas fa-quote-left"></i></div>
-                            <div class="flex-1">
-                                <p class="font-medium text-xs leading-snug" id="overlay-profile-bio">Bio text</p>
-                                <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Bio</p>
-                            </div>
-                        </div>
-                        <div class="px-5 py-3.5 flex items-center">
-                            <div class="w-7 text-gray-400 text-sm"><i class="fas fa-at"></i></div>
-                            <div class="flex-1">
-                                <p class="font-bold text-xs leading-tight" id="overlay-profile-username">@username</p>
-                                <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Username</p>
-                            </div>
-                            <button class="text-blue-500 text-xs font-bold" onclick="window.copyToClipboard(document.getElementById('overlay-profile-username').textContent);">Copy</button>
-                        </div>
-                        <div class="px-5 py-3.5 flex items-center" id="overlay-bday-row">
-                            <div class="w-7 text-gray-400 text-sm"><i class="fas fa-birthday-cake"></i></div>
-                            <div class="flex-1">
-                                <p class="font-bold text-xs leading-tight" id="overlay-profile-birthday">Not Provided</p>
-                                <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Birthday</p>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabbed Section (Posts, Media, Links) -->
-                <div class="bg-white dark:bg-[#1e293b] rounded-t-3xl shadow-sm border border-gray-100 dark:border-white/5 flex-1 overflow-hidden flex flex-col pb-safe">
-                    <div class="flex items-center justify-around border-b border-gray-100 dark:border-white/5 px-2 shrink-0">
-                        <button class="flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all" id="tab-btn-posts" onclick="window.switchContactTab('posts')">Posts</button>
-                        <button class="flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all" id="tab-btn-media" onclick="window.switchContactTab('media')">Media</button>
-                        <button class="flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all" id="tab-btn-links" onclick="window.switchContactTab('links')">Links</button>
-                    </div>
-                    <div class="p-4 overflow-y-auto no-scrollbar flex-1 relative">
-                        <div id="overlay-profile-posts-grid" class="grid grid-cols-3 gap-1.5"></div>
-                        <div id="overlay-profile-media-grid" class="hidden grid-cols-3 gap-1.5">
-                            <div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>
-                        </div>
-                        <div id="overlay-profile-links-list" class="hidden flex-col gap-2">
-                            <div class="text-center py-6 text-gray-400 text-xs">No links available.</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- FULLSCREEN STICKER STUDIO MAIN OVERLAY -->
-            <div id="sticker-studio-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
-                <div class="px-4 py-3 bg-white dark:bg-[#1e293b] flex items-center justify-between shrink-0 shadow-sm z-10">
-                    <button onclick="window.closeStickerStudio()" class="text-gray-500 dark:text-gray-300 btn-press"><i class="fas fa-arrow-left text-lg"></i></button>
-                    <h2 class="font-black text-lg text-pink-500">Sticker Studio</h2>
-                    <div class="w-6"></div>
-                </div>
-                
-                <div class="flex items-center justify-around bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5 shrink-0 px-2">
-                    <button class="flex-1 py-3.5 text-xs font-bold text-pink-500 border-b-2 border-pink-500 transition-all" id="tab-btn-mystickers" onclick="window.switchStickerTab('my')">My Stickers</button>
-                    <button class="flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all" id="tab-btn-explore" onclick="window.switchStickerTab('explore')">Explore</button>
-                </div>
-                
-                <div class="flex-1 overflow-y-auto no-scrollbar p-4 relative" id="sticker-studio-content">
-                    <!-- My Stickers Tab -->
-                    <div id="my-stickers-tab" class="space-y-4">
-                        <button onclick="window.openCreateStickerPackModal()" class="w-full py-4 bg-pink-50 dark:bg-pink-900/20 text-pink-600 font-bold rounded-2xl border-2 border-dashed border-pink-200 dark:border-pink-900/50 flex flex-col items-center justify-center btn-press hover:bg-pink-100 transition-colors">
-                            <i class="fas fa-folder-plus text-2xl mb-1"></i>
-                            <span class="text-xs">Create New Pack</span>
-                        </button>
-                        <div id="my-sticker-packs-list" class="space-y-3">
-                            <div class="text-center py-10 text-gray-400 text-xs font-bold">Loading your packs...</div>
-                        </div>
-                    </div>
-                    <!-- Explore Tab -->
-                    <div id="explore-stickers-tab" class="hidden space-y-3">
-                        <div class="text-center py-10 text-gray-400 text-xs font-bold">Explore community stickers here...</div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- SINGLE STICKER PACK VIEW -->
-            <div id="single-pack-overlay" class="fixed inset-0 z-[210] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white transform translate-x-full transition-transform duration-300">
-                <div class="px-4 py-3 bg-white dark:bg-[#1e293b] flex items-center justify-between shrink-0 shadow-sm border-b border-gray-100 dark:border-white/5">
-                    <button onclick="window.closeSinglePackView()" class="text-gray-500 dark:text-gray-300 btn-press"><i class="fas fa-arrow-left text-lg"></i></button>
-                    <h2 class="font-bold text-sm" id="single-pack-title">Pack Name</h2>
-                    <button onclick="window.deleteCurrentStickerPack()" class="text-red-500 btn-press text-xs font-bold"><i class="fas fa-trash"></i></button>
-                </div>
-                <div class="p-4 flex-1 overflow-y-auto no-scrollbar">
-                    <button onclick="window.openStickerMaker()" class="w-full py-3 mb-4 bg-pink-600 text-white font-bold rounded-xl shadow-md btn-press flex items-center justify-center gap-2 text-xs">
-                        <i class="fas fa-paint-brush"></i> Make Sticker
-                    </button>
-                    <div id="single-pack-grid" class="grid grid-cols-4 gap-3"></div>
-                </div>
-            </div>
-
-            <!-- STICKER MAKER CANVAS OVERLAY -->
-            <div id="sticker-maker-overlay" class="fixed inset-0 z-[220] hidden flex-col bg-slate-900 text-white">
-                <div class="px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0 bg-slate-950">
-                    <button onclick="window.closeStickerMaker()" class="text-white text-xs font-semibold hover:opacity-80 btn-press">Cancel</button>
-                    <span class="font-bold text-xs text-pink-400">Design Sticker</span>
-                    <button onclick="window.saveCreatedSticker()" class="px-3.5 py-1.5 bg-pink-600 rounded-full text-xs font-bold shadow-md hover:bg-pink-700 btn-press">Done</button>
-                </div>
-                <div class="flex-1 relative flex items-center justify-center p-4 bg-slate-800" style="background-image: radial-gradient(#ffffff33 1px, transparent 1px); background-size: 20px 20px;">
-                    <!-- The exactly 512x512 constraint area -->
-                    <div class="relative bg-white shadow-2xl rounded-2xl overflow-hidden" style="width: 100%; max-width: 320px; aspect-ratio: 1/1;" id="sticker-canvas-wrapper">
-                        <canvas id="sticker-draw-canvas" width="512" height="512" class="w-full h-full cursor-crosshair"></canvas>
-                        <div id="sticker-maker-text-layer" class="absolute inset-0 pointer-events-none overflow-hidden hidden flex items-center justify-center">
-                            <span id="sm-text-preview" class="text-black font-black text-4xl text-center drop-shadow-md cursor-move pointer-events-auto draggable-text"></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="p-3 bg-slate-950 border-t border-white/10 shrink-0 space-y-3">
-                    <div class="flex justify-between items-center gap-2">
-                        <button class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex flex-col items-center btn-press hover:bg-white/20" id="sm-brush-btn" onclick="window.toggleSMBrush()">
-                            <i class="fas fa-paint-brush mb-1 text-pink-400"></i> Brush
-                        </button>
-                        <button class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex flex-col items-center btn-press hover:bg-white/20" onclick="window.addSMText()">
-                            <i class="fas fa-font mb-1 text-blue-400"></i> Text
-                        </button>
-                        <label class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex flex-col items-center btn-press hover:bg-white/20 cursor-pointer">
-                            <i class="fas fa-image mb-1 text-green-400"></i> Image
-                            <input type="file" id="sm-image-upload" accept="image/*" class="hidden">
-                        </label>
-                        <div class="flex-1 flex flex-col items-center justify-center">
-                            <input type="color" id="sm-color-picker" value="#ec4899" class="w-8 h-8 rounded-full cursor-pointer bg-transparent border-none p-0">
-                        </div>
-                    </div>
-                    <button class="w-full py-1.5 bg-red-500/20 text-red-400 font-bold text-[10px] rounded-lg btn-press uppercase tracking-wider" onclick="window.clearSMCanvas()">Clear Canvas</button>
-                </div>
-            </div>
-
-            <!-- FULLSCREEN INSTAGRAM/WHATSAPP STORY VIEWER (CLEAN) -->
-            <div id="story-viewer-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-black text-white touch-none">
-                <div class="absolute top-0 inset-x-0 z-10 px-3 pt-3 pb-6 bg-gradient-to-b from-black/80 to-transparent">
-                    <div class="flex items-center justify-between">
-                        <div class="flex items-center gap-2 cursor-pointer" onclick="window.openStoryViewerProfile()">
-                            <img id="story-viewer-dp" src="https://placehold.co/100" class="w-8 h-8 rounded-full object-cover">
-                            <div>
-                                <p class="text-sm font-bold flex items-center gap-1" id="story-viewer-name">User</p>
-                                <p class="text-[10px] text-white/70" id="story-viewer-time">Just now</p>
-                            </div>
-                        </div>
-                        <button onclick="window.closeStoryViewer()" class="text-white text-xl px-2 opacity-80 hover:opacity-100 btn-press"><i class="fas fa-times"></i></button>
-                    </div>
-                </div>
-                
-                <div class="flex-1 relative flex items-center justify-center overflow-hidden" id="story-viewer-image-container">
-                    <img id="story-viewer-img" src="" class="w-full h-full object-contain pointer-events-none">
-                    <div id="story-viewer-text" class="absolute px-4 text-white text-3xl font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center hidden pointer-events-none" style="top: 40%; left: 50%; transform: translateX(-50%); width: 100%;"></div>
-                </div>
-                
-                <div class="absolute bottom-0 inset-x-0 z-10 p-4 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-3">
-                    <input type="text" id="story-reply-input" placeholder="Reply to story..." class="flex-1 bg-black/40 border border-white/30 rounded-full px-5 py-3.5 text-[13px] text-white placeholder-white/70 outline-none backdrop-blur-sm shadow-sm">
-                    <button onclick="window.sendStoryReply()" class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg btn-press shrink-0">
-                        <i class="fas fa-paper-plane text-blue-600 text-[15px]"></i>
-                    </button>
-                </div>
-            </div>
-
-            <!-- PHOTO STORY EDITOR OVERLAY -->
-            <div id="story-editor-overlay" class="fixed inset-0 z-[150] hidden flex flex-col bg-slate-950 text-white">
-                <div class="px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0">
-                    <button onclick="window.closeStoryEditor()" class="text-white text-xs font-semibold hover:opacity-80">Cancel</button>
-                    <span class="font-bold text-xs">Create Photo Story</span>
-                    <button onclick="window.publishStory()" class="px-3.5 py-1.5 bg-blue-600 rounded-full text-xs font-bold shadow-md hover:bg-blue-700 btn-press">Post</button>
-                </div>
-                <div class="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-black">
-                    <canvas id="story-canvas" class="max-w-full max-h-full object-contain"></canvas>
-                    
-                    <div id="story-text-overlay" class="absolute hidden px-4 py-2 text-white font-black text-center text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] draggable-text cursor-move" style="top: 40%; left: 50%; transform: translateX(-50%);">
-                        <span>Story Text</span>
-                    </div>
-                    
-                    <div id="story-upload-placeholder" class="flex flex-col items-center justify-center p-6 text-center">
-                        <i class="fas fa-images text-4xl text-gray-500 mb-3"></i>
-                        <p class="text-xs font-semibold mb-3">Select a photo to start editing</p>
-                        <label class="px-4 py-2 bg-blue-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-700 btn-press">
-                            Choose Photo
-                            <input type="file" id="story-file-input" accept="image/*" class="hidden">
-                        </label>
-                    </div>
-                </div>
-                <div class="p-3.5 bg-slate-900 border-t border-white/10 space-y-2.5 shrink-0">
-                    <div class="flex items-center justify-between gap-2.5">
-                        <button onclick="window.toggleStoryBrush()" id="brush-toggle-btn" class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex items-center justify-center gap-1.5">
-                            <i class="fas fa-paint-brush"></i> Brush
-                        </button>
-                        <button onclick="window.addStoryTextPrompt()" class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex items-center justify-center gap-1.5">
-                            <i class="fas fa-font"></i> Text
-                        </button>
-                        <input type="color" id="story-brush-color" value="#ef4444" class="w-8 h-8 rounded-xl border border-white/20 bg-transparent cursor-pointer">
-                    </div>
-                    <input type="text" id="story-caption-input" placeholder="Add a caption..." class="w-full px-3.5 py-2 bg-white/10 rounded-xl text-xs text-white placeholder-white/50 border border-white/10 outline-none">
-                </div>
-            </div>
-
-            <!-- NEW ADVANCED PROFILE COLOR PICKER OVERLAY -->
-            <div id="profile-color-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
-                <div class="px-4 py-3 flex items-center justify-between shrink-0 bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5">
-                    <button onclick="window.closeAdvancedColorPicker()" class="text-gray-500 dark:text-white text-xl p-1 btn-press"><i class="fas fa-arrow-left"></i></button>
-                    <div class="flex bg-gray-100 dark:bg-black/30 rounded-full p-1 border border-gray-200 dark:border-white/10">
-                        <button class="px-5 py-1.5 rounded-full bg-white dark:bg-white/20 text-xs font-bold text-gray-900 dark:text-white shadow-sm">Profile Settings</button>
-                    </div>
-                    <button class="text-gray-500 dark:text-white text-xl p-1 btn-press"><i class="fas fa-sun"></i></button>
-                </div>
-
-                <div class="flex-1 overflow-y-auto no-scrollbar">
-                    <div id="color-preview-bg" class="relative overflow-hidden bg-white dark:bg-[#1e293b] px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-gray-100 dark:border-transparent">
-                        <div id="color-preview-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
-                        <div class="relative z-10 flex flex-col items-center">
-                            <img id="color-preview-dp" src="https://placehold.co/150" class="w-20 h-20 rounded-full object-cover shadow-xl border-[3px] border-white dark:border-white/20">
-                            <h2 class="text-lg font-black flex items-center gap-1.5 mt-3 tracking-tight text-gray-900 dark:text-white" id="color-preview-name">Name</h2>
-                            <p class="text-emerald-500 font-semibold text-[11px] mt-0.5">online</p>
-                        </div>
-                    </div>
-
-                    <div class="p-4 -mt-6 relative z-20">
-                        <div class="bg-white dark:bg-[#1e293b] rounded-[28px] p-5 shadow-lg border border-gray-100 dark:border-white/5 space-y-5">
-                            
-                            <!-- ADVANCED DUAL COLOR SELECTION FOR GRADIENT OR SOLID -->
-                            <div class="space-y-2">
-                                <p class="text-[11px] font-bold text-gray-500 uppercase tracking-wide">Background Colors (Premium)</p>
-                                <div class="flex gap-2 mb-2">
-                                    <div class="flex-1 bg-gray-50 dark:bg-slate-700/50 p-2 rounded-xl flex items-center justify-between border border-gray-100 dark:border-white/5">
-                                        <span class="text-xs font-bold pl-1">Color 1</span>
-                                        <input type="color" id="adv-color-1" value="#3b82f6" class="w-8 h-8 rounded-lg border-0 cursor-pointer bg-transparent p-0" onchange="window.updateLiveAdvancedGradient()">
-                                    </div>
-                                    <div class="flex-1 bg-gray-50 dark:bg-slate-700/50 p-2 rounded-xl flex items-center justify-between border border-gray-100 dark:border-white/5">
-                                        <span class="text-xs font-bold pl-1">Color 2</span>
-                                        <input type="color" id="adv-color-2" value="#9333ea" class="w-8 h-8 rounded-lg border-0 cursor-pointer bg-transparent p-0" onchange="window.updateLiveAdvancedGradient()">
-                                    </div>
-                                </div>
-                                <p class="text-[9px] text-gray-400">Pick two colors to create a custom gradient. Pick the exact same color in both boxes for a solid background.</p>
-                            </div>
-
-                            <!-- CUSTOM TICK COLOR SELECTION -->
-                            <div class="border-t border-gray-100 dark:border-white/10 pt-4" id="custom-tick-color-section">
-                                <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase">Custom Verified Tick Color</p>
-                                <div class="flex overflow-x-auto no-scrollbar gap-3 pb-1" id="tick-swatch-container">
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-blue-500')"><i class="fas fa-check-circle text-blue-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-green-500')"><i class="fas fa-check-circle text-green-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-yellow-500')"><i class="fas fa-check-circle text-yellow-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-purple-500')"><i class="fas fa-check-circle text-purple-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-pink-500')"><i class="fas fa-check-circle text-pink-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-emerald-500')"><i class="fas fa-check-circle text-emerald-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-rose-500')"><i class="fas fa-check-circle text-rose-500"></i></button>
-                                    <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-orange-500')"><i class="fas fa-check-circle text-orange-500"></i></button>
-                                </div>
-                            </div>
-
-                            <!-- ICONS MENU -->
-                            <div class="border-t border-gray-100 dark:border-white/10 pt-4">
-                                <div class="flex items-center justify-between cursor-pointer btn-press" onclick="document.getElementById('icon-selector-panel').classList.toggle('hidden')">
-                                    <span class="text-[13px] font-bold text-gray-900 dark:text-white">Add Background Icons</span>
-                                    <span class="text-[13px] font-bold text-blue-500 dark:text-blue-400" id="current-icon-status">Off</span>
-                                </div>
-                                <div id="icon-selector-panel" class="hidden pt-4 transition-all">
-                                    <div class="flex overflow-x-auto no-scrollbar gap-3 pb-1">
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('')"><i class="fas fa-ban text-gray-400"></i></button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('👑')">👑</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('⚔️')">⚔️</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('❤️')">❤️</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('😂')">😂</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('🔥')">🔥</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('🚀')">🚀</button>
-                                        <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('✨')">✨</button>
-                                    </div>
-                                </div>
-                            </div>
-                            <button onclick="window.resetAdvancedProfileColor()" class="w-full text-left font-bold text-[13px] text-red-500 border-t border-gray-100 dark:border-white/10 pt-4">Reset Design Default</button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="p-4 bg-gray-50 dark:bg-[#0f172a] shrink-0 border-t border-gray-100 dark:border-white/5 pb-safe">
-                    <button onclick="window.applyAdvancedProfileColor()" class="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-bold text-[13px] shadow-lg btn-press">Apply Current Style</button>
-                </div>
-            </div>
-
-            <!-- APP CONFIRM ALERTS (Replaces window.confirm) -->
-            <div id="custom-alert-container"></div>
-            <div id="modals-container"></div>
-
-        </div> <!-- END OF SECURE APP WRAPPER -->
+        <h1 class="text-3xl font-black mb-2 animate-pulse">System Upgrade</h1>
+        <p class="text-gray-400 text-sm max-w-xs text-center leading-relaxed">Chatrix is currently undergoing scheduled maintenance to improve your experience. We'll be back online shortly!</p>
     </div>
 
-    <!-- SECURE INJECTION SCRIPT AREA -->
+    <!-- BANNED SCREEN -->
+    <div id="banned-overlay" class="fixed inset-0 z-[9999] hidden flex-col items-center bg-[#090d16] text-white p-6 pt-20 overflow-y-auto">
+        <img id="banned-dp" src="https://placehold.co/150" class="w-28 h-28 rounded-full border-[3px] border-red-500 mb-4 shadow-[0_0_40px_rgba(239,68,68,0.3)] object-cover">
+        <h1 id="banned-name" class="text-2xl font-black mb-1">User Name</h1>
+        <p id="banned-username" class="text-sm text-red-400 font-bold mb-8">@username</p>
+        
+        <div class="bg-red-500/10 border border-red-500/20 p-6 rounded-3xl text-center max-w-sm w-full mb-8">
+            <i class="fas fa-ban text-4xl text-red-500 mb-4 drop-shadow-md"></i>
+            <h2 class="text-lg font-bold mb-3 text-red-50">This account can no longer use Chatrix</h2>
+            <p class="text-xs text-gray-400 leading-relaxed mb-3">Your account has been restricted due to violations of our Community Guidelines or Terms of Service.</p>
+            <p class="text-[11px] text-gray-500 leading-relaxed font-medium">If you believe this was a mistake, you can request a review from our moderation team.</p>
+        </div>
+        
+        <button onclick="document.getElementById('appeal-modal').classList.remove('hidden'); document.getElementById('appeal-modal').style.display='flex';" class="w-full max-w-sm py-4 bg-white text-black rounded-2xl font-black text-sm shadow-lg hover:scale-95 transition-transform btn-press">Request a Review</button>
+    </div>
+
+    <!-- APPEAL MODAL -->
+    <div id="appeal-modal" class="fixed inset-0 z-[10000] hidden flex-col justify-end bg-black/80 backdrop-blur-sm">
+        <div class="bg-[#1e293b] p-6 rounded-t-3xl w-full border-t border-white/10 shadow-2xl">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold text-lg text-white">Appeal Suspension</h3>
+                <button onclick="document.getElementById('appeal-modal').classList.add('hidden')" class="text-gray-400 p-2"><i class="fas fa-times text-xl"></i></button>
+            </div>
+            <p class="text-xs text-gray-400 mb-4 font-medium">Please explain in detail why your account should be reinstated. (Minimum 25 words required)</p>
+            <textarea id="appeal-text" rows="5" class="w-full bg-[#0f172a] border border-white/10 rounded-xl p-4 text-sm text-white focus:border-blue-500 outline-none transition-all placeholder-gray-600" placeholder="Type your reason here..."></textarea>
+            
+            <div class="flex justify-between items-center mt-3 mb-6">
+                <span id="word-count" class="text-xs text-red-400 font-bold transition-colors">0 / 25 words</span>
+            </div>
+            <button id="submit-appeal-btn" disabled class="w-full py-4 bg-blue-600/30 text-white/50 rounded-xl font-bold transition-all cursor-not-allowed border border-transparent">Submit Appeal Request</button>
+        </div>
+    </div>
+
+    <script>
+        const appealText = document.getElementById('appeal-text');
+        const wordCount = document.getElementById('word-count');
+        const submitBtn = document.getElementById('submit-appeal-btn');
+
+        appealText.addEventListener('input', () => {
+            const words = appealText.value.trim().split(/\s+/).filter(w => w.length > 0).length;
+            wordCount.innerText = `${words} / 25 words`;
+            
+            if (words >= 25) {
+                wordCount.classList.remove('text-red-400');
+                wordCount.classList.add('text-emerald-400');
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('bg-blue-600/30', 'text-white/50', 'cursor-not-allowed');
+                submitBtn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-lg');
+            } else {
+                wordCount.classList.add('text-red-400');
+                wordCount.classList.remove('text-emerald-400');
+                submitBtn.disabled = true;
+                submitBtn.classList.add('bg-blue-600/30', 'text-white/50', 'cursor-not-allowed');
+                submitBtn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700', 'shadow-lg');
+            }
+        });
+
+        document.getElementById('submit-appeal-btn').onclick = async () => {
+            if(submitBtn.disabled) return;
+            const text = appealText.value;
+            if (window.submitBanAppeal) {
+                await window.submitBanAppeal(text);
+            }
+        };
+    </script>
+    
+    <!-- APP CONTAINER -->
+    <div class="app-container" id="app">
+
+        <!-- SPLASH SCREEN (NEW ANIMATION) -->
+        <div id="splash-screen" class="absolute inset-0 z-[500] bg-white dark:bg-slate-900 flex flex-col items-center justify-center transition-opacity duration-300">
+            <div class="relative w-32 h-32 mb-6 flex items-center justify-center">
+                <div class="absolute inset-0 rounded-full bg-blue-500/20 animate-ping"></div>
+                <div class="absolute inset-4 rounded-full bg-blue-500/40 animate-pulse"></div>
+                <div class="relative z-10 w-20 h-20 bg-gradient-to-br from-blue-400 to-blue-600 rounded-3xl shadow-[0_0_30px_rgba(59,130,246,0.6)] flex items-center justify-center animate-bounce">
+                    <i class="fas fa-comment-dots text-4xl text-white"></i>
+                </div>
+            </div>
+            <h1 class="text-4xl font-black text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600 tracking-tight drop-shadow-sm">Chatrix</h1>
+            <p class="text-xs text-gray-400 mt-2 font-semibold tracking-widest uppercase">Secure Engine</p>
+        </div>
+
+        <div id="toast" class="absolute top-4 left-1/2 transform -translate-x-1/2 -translate-y-[200%] transition-transform duration-300 z-[250] bg-gray-900 text-white px-5 py-2.5 rounded-full text-xs font-semibold shadow-2xl flex items-center gap-2">
+            <span id="toast-icon"></span>
+            <span id="toast-msg">Notification</span>
+        </div>
+
+        <!-- AUTH: LOGIN VIEW -->
+        <div id="login-view" class="view-layer view-hidden justify-center px-8 bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-slate-950">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-black text-gray-900 dark:text-white tracking-tight">Welcome Back</h1>
+                <p class="text-gray-500 text-sm mt-1 font-medium">Log in to Chatrix</p>
+            </div>
+            <form id="login-form" class="space-y-4">
+                <input type="text" id="login-username" required placeholder="Username or @username" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <input type="password" id="login-password" required placeholder="Password" class="w-full px-5 py-4 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <button type="submit" class="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg transition-all btn-press">Sign In</button>
+            </form>
+            <div class="mt-6 text-center">
+                <p class="text-sm font-medium text-gray-500">New here? <a href="#" id="go-to-signup" class="text-blue-600 font-bold hover:underline">Create an account</a></p>
+            </div>
+            <div id="login-error" class="mt-4 text-red-500 text-xs font-medium text-center hidden p-3 bg-red-50 dark:bg-red-950/40 rounded-xl"></div>
+        </div>
+
+        <!-- AUTH: SIGNUP VIEW -->
+        <div id="signup-view" class="view-layer view-hidden py-8 px-8 overflow-y-auto no-scrollbar bg-gradient-to-br from-white to-blue-50 dark:from-slate-900 dark:to-slate-950">
+            <div class="text-center mb-6 pt-2">
+                <h1 class="text-2xl font-black text-gray-900 dark:text-white tracking-tight">Join Chatrix</h1>
+                <p class="text-gray-500 text-sm mt-0.5 font-medium">Create your private identity</p>
+            </div>
+            <form id="signup-form" class="space-y-4 flex-1 pb-8">
+                <div class="flex justify-center mb-4">
+                    <div class="relative btn-press">
+                        <div class="w-20 h-20 rounded-full bg-white dark:bg-slate-800 border-2 border-dashed border-blue-400 flex items-center justify-center overflow-hidden cursor-pointer shadow-md" id="dp-preview-container">
+                            <i class="fas fa-camera text-blue-500 text-xl" id="dp-icon"></i>
+                            <img id="dp-preview" class="w-full h-full object-cover hidden" alt="DP Preview">
+                        </div>
+                        <input type="file" id="signup-dp" accept="image/*" class="absolute inset-0 w-full h-full opacity-0 cursor-pointer">
+                    </div>
+                </div>
+                <input type="text" id="signup-name" required placeholder="Full Name" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <input type="text" id="signup-username" required placeholder="Username (e.g. syroxzen)" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <input type="password" id="signup-password" required placeholder="Password" class="w-full px-5 py-3.5 bg-white dark:bg-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700 shadow-sm outline-none font-medium text-sm text-gray-900 dark:text-white placeholder:text-gray-400">
+                <button type="submit" class="w-full py-4 mt-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-bold text-sm shadow-lg btn-press">Create Account</button>
+            </form>
+            <div class="text-center pb-4">
+                <p class="text-sm font-medium text-gray-500">Already a member? <a href="#" id="go-to-login" class="text-blue-600 font-bold hover:underline">Log in</a></p>
+            </div>
+            <div id="signup-error" class="mt-2 text-red-500 text-xs font-medium text-center hidden p-3 bg-red-50 dark:bg-red-950/40 rounded-xl"></div>
+        </div>
+
+        <!-- MAIN APPLICATION SHELL -->
+        <div id="main-app" class="view-layer view-hidden flex-col">
+            <div class="flex-1 relative overflow-hidden pb-[60px]">
+
+                <!-- TAB 1: CHATS -->
+                <div id="home-tab" class="tab-layer tab-visible flex flex-col">
+                    <div class="px-5 py-3.5 flex flex-col glass-panel shrink-0 sticky top-0 z-10 border-b-0 pb-0">
+                        <div id="normal-header" class="flex items-center mb-2">
+                            <div class="text-2xl font-black flex-1 tracking-tight text-gray-900 dark:text-white">Chatrix</div>
+                            <button class="w-9 h-9 rounded-full bg-gray-100 dark:bg-slate-800 hover:bg-gray-200 flex items-center justify-center text-gray-700 dark:text-gray-300 btn-press" onclick="window.openSearchOverlay()">
+                                <i class="fas fa-search text-xs"></i>
+                            </button>
+                        </div>
+                        <div id="selection-toolbar" class="hidden flex items-center justify-between py-2 border-b border-gray-200 dark:border-slate-700 mb-2">
+                            <div class="flex items-center gap-3">
+                                <button onclick="window.exitSelectionMode()" class="text-gray-500 hover:text-gray-700 dark:text-gray-400"><i class="fas fa-times text-base"></i></button>
+                                <span id="selection-count" class="font-bold text-xs text-gray-900 dark:text-white">0 Selected</span>
+                            </div>
+                            <div class="flex items-center gap-2" id="selection-actions"></div>
+                        </div>
+                        <div class="flex items-center overflow-x-auto no-scrollbar gap-4 mt-1 pb-2" id="folder-tabs-container">
+                            <button class="folder-tab active text-xs text-gray-500 py-1" onclick="window.selectFolder('All', this)">All Chats</button>
+                        </div>
+                    </div>
+                    <div class="flex-1 overflow-y-auto no-scrollbar pb-28 relative" id="chat-list"></div>
+                </div>
+
+                <!-- TAB 2: STORIES -->
+                <div id="stories-tab" class="tab-layer tab-hidden flex flex-col">
+                    <div class="px-5 py-3.5 flex items-center justify-between glass-panel shrink-0 sticky top-0 z-10">
+                        <h2 class="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Stories</h2>
+                        <button onclick="window.openStoryEditor()" class="px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-bold flex items-center gap-1.5 shadow-md btn-press">
+                            <i class="fas fa-plus text-[10px]"></i> Add Story
+                        </button>
+                    </div>
+                    <div class="flex-1 overflow-y-auto no-scrollbar p-4 pb-28 space-y-4" id="stories-feed-container"></div>
+                </div>
+
+                <!-- TAB 3: SETTINGS -->
+                <div id="settings-tab" class="tab-layer tab-hidden flex flex-col">
+                    <div class="px-6 py-4 flex items-center justify-between glass-panel shrink-0 sticky top-0 z-10">
+                        <h2 class="text-2xl font-black tracking-tight text-gray-900 dark:text-white">Settings</h2>
+                        <button class="w-8 h-8 rounded-full flex items-center justify-center text-current opacity-70 hover:opacity-100 btn-press text-gray-900 dark:text-white" onclick="window.openAppearanceModal()">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto no-scrollbar px-5 pt-3 pb-28 flex flex-col gap-4">
+                        <div id="settings-header-bg" class="relative overflow-hidden flex flex-col items-center pt-2 rounded-3xl p-4 transition-all duration-300 shrink-0 bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5">
+                            <div id="settings-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none text-2xl flex flex-wrap gap-6 p-4 justify-around"></div>
+                            <img id="settings-top-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full object-cover shadow-md border-2 border-white ring-2 ring-gray-100 dark:ring-slate-700 bg-white relative z-10">
+                            <h2 class="text-xl font-extrabold flex items-center gap-1.5 mt-3 text-gray-900 dark:text-white relative z-10" id="settings-top-name">User</h2>
+                            <p class="text-gray-400 text-xs font-medium mt-0.5 relative z-10" id="settings-top-username">@username</p>
+                        </div>
+
+                        <!-- Enter is Send Toggle -->
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden p-4 shrink-0">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center">
+                                    <div class="w-9 h-9 rounded-2xl bg-blue-50 dark:bg-blue-500/20 text-blue-600 dark:text-blue-400 flex items-center justify-center mr-3 text-base">
+                                        <i class="fas fa-keyboard"></i>
+                                    </div>
+                                    <div>
+                                        <p class="font-bold text-xs text-gray-900 dark:text-white">Enter is Send</p>
+                                        <p class="text-[10px] text-gray-400 font-medium">Pressing Enter sends message</p>
+                                    </div>
+                                </div>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" id="enter-is-send-checkbox" class="sr-only peer" onchange="window.toggleEnterIsSend(this.checked)">
+                                    <div class="w-11 h-6 bg-gray-200 dark:bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.switchTab('profile')">
+                                <div class="w-7 text-center text-gray-400 text-base"><i class="fas fa-user"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Account</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openAppearanceModal()">
+                                <div class="w-7 text-center text-purple-400 text-base"><i class="fas fa-palette"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Appearance</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openFolderManagerModal()">
+                                <div class="w-7 text-center text-blue-400 text-base"><i class="fas fa-folder"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Chat Folders</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" onclick="window.openArchivedChatsModal()">
+                                <div class="w-7 text-center text-emerald-500 text-base"><i class="fas fa-archive"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Archived Chats</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                        </div>
+                        
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openAdvancedColorPicker()">
+                                <div class="w-7 text-center text-amber-500 text-base"><i class="fas fa-brush"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Profile Colors</span>
+                                <span class="text-[9px] bg-amber-100 text-amber-700 font-black px-2 py-0.5 rounded-full mr-2">VIP</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" id="premium-btn-action">
+                                <div class="w-7 text-center text-blue-500 text-base"><i class="fas fa-star"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Chatrix Premium</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden flex flex-col shrink-0">
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openChangePasswordModal()">
+                                <div class="w-7 text-center text-indigo-500 text-base"><i class="fas fa-key"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Change Password</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 border-b border-gray-50 dark:border-white/5 btn-press text-left w-full" onclick="window.openActiveDevicesModal()">
+                                <div class="w-7 text-center text-teal-500 text-base"><i class="fas fa-mobile-alt"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Active Devices</span>
+                                <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press text-left w-full" onclick="window.contactSupportInApp()">
+                                <div class="w-7 text-center text-sky-500 text-base"><i class="fas fa-headset"></i></div>
+                                <span class="ml-3 flex-1 font-semibold text-xs text-gray-900 dark:text-white">Contact Support</span>
+                                <i class="fas fa-comment-dots text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                            </button>
+                        </div>
+
+                        <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-red-100 dark:border-red-900/50 overflow-hidden shrink-0">
+                            <button class="flex items-center px-5 py-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 border-b border-red-50 dark:border-red-900/50 btn-press text-left w-full text-red-500" onclick="window.handleLogout()">
+                                <div class="w-7 text-center text-base"><i class="fas fa-sign-out-alt"></i></div>
+                                <span class="ml-3 flex-1 font-bold text-xs">Log Out</span>
+                            </button>
+                            <button class="flex items-center px-5 py-3.5 hover:bg-red-50 dark:hover:bg-red-900/20 btn-press text-left w-full text-red-500" onclick="window.confirmDeleteAccount()">
+                                <div class="w-7 text-center text-base"><i class="fas fa-trash-alt"></i></div>
+                                <span class="ml-3 flex-1 font-bold text-xs">Delete Account</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: PROFILE -->
+                <div id="profile-tab" class="tab-layer tab-hidden flex flex-col">
+                    <div class="px-4 py-3 flex items-center justify-between shrink-0 sticky top-0 z-20 glass-panel border-b border-gray-100 dark:border-white/5">
+                        <button class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-gray-900 dark:text-white" onclick="window.switchTab('settings')">
+                            <i class="fas fa-arrow-left text-base"></i>
+                        </button>
+                        <h2 class="text-base font-bold text-gray-900 dark:text-white">Profile</h2>
+                        <div class="flex items-center gap-1">
+                            <button class="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-amber-500" onclick="window.openAdvancedColorPicker()" title="Customize Style">
+                                <i class="fas fa-paint-brush text-sm"></i>
+                            </button>
+                            <button class="w-8 h-8 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center btn-press text-gray-900 dark:text-white" onclick="window.openModernEditModal('name')">
+                                <i class="fas fa-pen text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="flex-1 overflow-y-auto no-scrollbar pb-28">
+                        <div id="my-profile-header-bg" class="relative overflow-hidden bg-white dark:bg-slate-800 border-b border-gray-100 dark:border-transparent px-6 pt-6 pb-8 transition-all duration-300">
+                            <div id="my-profile-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
+                            <div class="relative z-10 flex flex-col items-center">
+                                <div class="relative group">
+                                    <img id="profile-dp" src="https://placehold.co/150" class="w-24 h-24 rounded-full object-cover shadow-xl border-4 border-white dark:border-white/10 ring-2 ring-gray-200 dark:ring-slate-700 bg-white">
+                                    <label class="absolute bottom-1 right-1 bg-blue-600 hover:bg-blue-700 text-white w-7 h-7 rounded-full flex items-center justify-center text-[11px] cursor-pointer shadow-md transition-all btn-press">
+                                        <i class="fas fa-camera"></i>
+                                        <input type="file" id="change-dp-input" accept="image/*" class="hidden">
+                                    </label>
+                                </div>
+                                <h2 class="text-xl font-black flex items-center gap-1.5 mt-3 tracking-tight text-gray-900 dark:text-white" id="profile-name">User</h2>
+                                <p class="text-emerald-500 font-semibold text-[11px] mt-0.5 flex items-center gap-1">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping"></span> online
+                                </p>
+                            </div>
+                        </div>
+
+                        <div class="p-5 -mt-3 relative z-10 space-y-4">
+                            <div class="grid grid-cols-3 gap-2">
+                                <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.openAdvancedColorPicker()">
+                                    <i class="fas fa-palette text-amber-500 text-base mb-1"></i>
+                                    <span class="text-[10px] font-bold text-gray-900 dark:text-white">Style</span>
+                                </button>
+                                <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.openModernEditModal('name')">
+                                    <i class="fas fa-user-edit text-blue-500 text-base mb-1"></i>
+                                    <span class="text-[10px] font-bold text-gray-900 dark:text-white">Edit Info</span>
+                                </button>
+                                <button class="bg-white dark:bg-slate-800 border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.switchTab('settings')">
+                                    <i class="fas fa-cog text-purple-500 text-base mb-1"></i>
+                                    <span class="text-[10px] font-bold text-gray-900 dark:text-white">Settings</span>
+                                </button>
+                            </div>
+
+                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden divide-y divide-gray-50 dark:divide-white/5">
+                                <div class="px-5 py-3.5 flex items-start cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.openModernEditModal('bio')">
+                                    <div class="w-7 text-gray-400 text-sm pt-0.5"><i class="fas fa-quote-left"></i></div>
+                                    <div class="flex-1">
+                                        <p class="font-medium text-xs leading-snug text-gray-900 dark:text-white" id="profile-bio-display">Trust once lost is never found again.</p>
+                                        <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Bio</p>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px] self-center"></i>
+                                </div>
+                                <div class="px-5 py-3.5 flex items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.openModernEditModal('username')">
+                                    <div class="w-7 text-gray-400 text-sm"><i class="fas fa-at"></i></div>
+                                    <div class="flex-1">
+                                        <p class="font-bold text-xs leading-tight text-gray-900 dark:text-white" id="profile-username-display">@username</p>
+                                        <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Username</p>
+                                    </div>
+                                    <i class="fas fa-copy text-gray-300 dark:text-gray-600 text-xs" onclick="event.stopPropagation(); window.copyToClipboard(window.currentUser.username);"></i>
+                                </div>
+                                <div class="px-5 py-3.5 flex items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-700/50 btn-press" onclick="window.promptEditBirthday()">
+                                    <div class="w-7 text-gray-400 text-sm"><i class="fas fa-birthday-cake"></i></div>
+                                    <div class="flex-1">
+                                        <p class="font-bold text-xs leading-tight text-gray-900 dark:text-white" id="profile-birthday-display">Add Birthday</p>
+                                        <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Birthday</p>
+                                    </div>
+                                    <i class="fas fa-chevron-right text-gray-300 dark:text-gray-600 text-[10px]"></i>
+                                </div>
+                            </div>
+
+                            <div class="bg-white dark:bg-slate-800 rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden p-4">
+                                <div class="flex items-center justify-between mb-3 border-b border-gray-100 dark:border-white/5 pb-2">
+                                    <h3 class="font-bold text-xs text-gray-900 dark:text-white flex items-center gap-1.5">
+                                        <i class="fas fa-layer-group text-blue-500"></i> Posts History
+                                    </h3>
+                                    <button onclick="window.openStoryEditor()" class="px-3 py-1 bg-blue-600 text-white rounded-xl text-[11px] font-bold btn-press shadow-sm flex items-center gap-1">
+                                        <i class="fas fa-plus text-[9px]"></i> Add Post
+                                    </button>
+                                </div>
+                                <div id="my-profile-posts-grid" class="grid grid-cols-2 gap-2.5 min-h-[100px]"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- BOTTOM NAVIGATION -->
+            <div class="absolute bottom-0 left-0 w-full bg-white dark:bg-slate-900 border-t border-gray-100 dark:border-white/5 flex justify-around items-center py-2 z-20 pb-safe shadow-[0_-5px_15px_rgba(0,0,0,0.03)] dark:shadow-none" id="bottom-navbar">
+                <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="home" onclick="window.switchTab('home')">
+                    <i class="fas fa-comment-dots text-lg mb-1 transition-all"></i>
+                    <span class="text-[10px] font-bold">Chats</span>
+                </button>
+                <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="stories" onclick="window.switchTab('stories')">
+                    <i class="fas fa-circle-notch text-lg mb-1 transition-all"></i>
+                    <span class="text-[10px] font-bold">Stories</span>
+                </button>
+                <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="settings" onclick="window.switchTab('settings')">
+                    <i class="fas fa-cog text-lg mb-1 transition-all"></i>
+                    <span class="text-[10px] font-bold">Settings</span>
+                </button>
+                <button class="nav-btn text-gray-400 flex flex-col items-center p-1.5 w-1/4 btn-press" data-target="profile" onclick="window.switchTab('profile')">
+                    <i class="fas fa-user text-lg mb-1 transition-all"></i>
+                    <span class="text-[10px] font-bold">Profile</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- SEARCH OVERLAY -->
+        <div id="search-view" class="fixed inset-0 z-50 hidden flex flex-col bg-white dark:bg-[#0f172a]">
+            <div class="px-2 py-3 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 gap-2 border-b border-gray-100 dark:border-white/5">
+                <button onclick="window.closeSearchOverlay()" class="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-900 dark:text-white btn-press">
+                    <i class="fas fa-arrow-left text-base"></i>
+                </button>
+                <div class="flex-1 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center px-3.5 py-2 mr-2 focus-within:ring-2 focus-within:ring-blue-400 transition-all">
+                    <i class="fas fa-search text-gray-400 mr-2 text-sm"></i>
+                    <input type="text" id="global-search-input" placeholder="Search users by name or username..." class="flex-1 bg-transparent border-none outline-none font-medium text-sm placeholder:text-gray-400 text-gray-900 dark:text-white">
+                    <button id="clear-search-btn" class="hidden text-gray-400 hover:text-gray-600 btn-press"><i class="fas fa-times-circle text-sm"></i></button>
+                </div>
+            </div>
+            <div class="flex-1 overflow-y-auto no-scrollbar pt-2 bg-white dark:bg-[#0f172a]">
+                <div id="search-history-header" class="px-5 py-2 flex justify-between items-center">
+                    <span class="text-xs font-bold text-gray-500 uppercase tracking-wider">Recent Searches</span>
+                    <button id="clear-history-btn" class="text-xs font-bold text-blue-500 hover:text-blue-700 btn-press">CLEAR</button>
+                </div>
+                <div id="search-results-list" class="flex flex-col pb-4"></div>
+            </div>
+        </div>
+
+        <!-- CHAT SCREEN -->
+        <div id="chat-screen" class="fixed inset-0 z-[100] hidden flex flex-col bg-white dark:bg-[#0f172a] h-[100dvh] max-h-[100dvh] overflow-hidden">
+            <div class="px-2 py-2 glass-panel shadow-sm flex items-center shrink-0 sticky top-0 border-b border-gray-100 dark:border-white/5 z-20">
+                <button id="back-from-chat" class="w-9 h-9 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center text-gray-900 dark:text-white mr-1 btn-press">
+                    <i class="fas fa-arrow-left text-base"></i>
+                </button>
+                <div class="flex flex-1 items-center cursor-pointer hover:bg-gray-50 dark:hover:bg-slate-800 rounded-full pr-3 pl-1 py-1 transition-colors btn-press" onclick="window.openChatHeaderTarget()">
+                    <img id="active-chat-dp" src="https://placehold.co/100" class="w-9 h-9 rounded-full object-cover mr-2.5 shadow-sm border border-gray-100 dark:border-white/10 bg-white">
+                    <div class="flex-1 min-w-0 pr-2">
+                        <h3 class="font-extrabold truncate tracking-tight text-sm leading-tight flex items-center gap-1 text-gray-900 dark:text-white" id="active-chat-name">Name</h3>
+                        <p class="text-[11px] text-blue-500 font-semibold truncate" id="active-chat-status">Connecting...</p>
+                    </div>
+                </div>
+                <div class="flex items-center text-gray-600 dark:text-gray-300 gap-1 ml-2" id="chat-header-actions">
+                    <button class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center btn-press text-blue-600" onclick="window.initiateVoiceCall()"><i class="fas fa-phone-alt text-xs"></i></button>
+                    <div class="relative">
+                        <button id="chat-menu-btn" class="w-8 h-8 rounded-full hover:bg-gray-100 dark:hover:bg-slate-800 flex items-center justify-center btn-press text-current" onclick="window.toggleChatMenu(event)"><i class="fas fa-ellipsis-v text-xs"></i></button>
+                        <div id="chat-menu-dropdown" class="absolute right-0 top-full mt-1 w-48 bg-white dark:bg-slate-800 rounded-2xl shadow-xl py-2 hidden border border-gray-100 dark:border-white/10 z-50"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- E2E ENCRYPTION NOTICE -->
+            <div class="w-full flex justify-center pt-3 pb-1 shrink-0 bg-transparent z-10 relative">
+                <div class="bg-[#FFF8DD] dark:bg-yellow-900/20 text-[#856404] dark:text-yellow-500 text-[10px] font-semibold px-3 py-1.5 rounded-xl flex items-center gap-1.5 shadow-sm border border-[#FFEeba] dark:border-yellow-700/30 text-center max-w-[85%] mx-auto backdrop-blur-sm">
+                    <i class="fas fa-lock text-[9px]"></i> <span>Messages and calls are end-to-end encrypted. No one outside of this chat can read or listen to them.</span>
+                </div>
+            </div>
+
+            <div class="flex-1 min-h-0 overflow-y-auto no-scrollbar px-3.5 pb-3.5 pt-1 flex flex-col gap-2.5 chat-bg relative z-0" id="messages-container"></div>
+
+            <div id="reply-preview-bar" class="hidden px-4 py-1.5 bg-gray-50 dark:bg-slate-900 border-t border-gray-200 dark:border-white/10 flex items-center justify-between text-xs shrink-0">
+                <div class="flex items-center gap-2 border-l-2 border-blue-500 pl-2 min-w-0">
+                    <div class="flex flex-col min-w-0">
+                        <span class="font-bold text-blue-600 text-[10px]" id="reply-to-user">Replying</span>
+                        <span class="text-gray-500 dark:text-gray-400 text-[11px] truncate max-w-[240px]" id="reply-to-text">Preview...</span>
+                    </div>
+                </div>
+                <button onclick="window.cancelReply()" class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 p-1"><i class="fas fa-times text-xs"></i></button>
+            </div>
+
+            <!-- CHAT INPUT BAR -->
+            <div id="chat-input-area" class="px-3 py-2 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t border-gray-100 dark:border-white/5 flex items-end gap-2 shrink-0 z-20 pb-safe">
+                <div class="flex-1 bg-gray-100/80 dark:bg-slate-800/80 rounded-3xl flex items-end min-h-[44px] px-1 py-1 focus-within:ring-2 focus-within:ring-blue-500/50 transition-all">
+                    <label class="w-9 h-9 rounded-full text-gray-400 hover:text-blue-500 flex items-center justify-center shrink-0 cursor-pointer btn-press mb-0.5">
+                        <i class="fas fa-plus text-lg"></i>
+                        <input type="file" id="attachment-input" accept="image/*" class="hidden">
+                    </label>
+                    <textarea id="message-input" rows="1" placeholder="Message..." class="flex-1 bg-transparent border-none outline-none resize-none font-medium py-2.5 px-2 max-h-28 no-scrollbar placeholder-gray-400 text-[13px] text-gray-900 dark:text-white leading-snug"></textarea>
+                </div>
+                <button type="button" id="send-btn" class="hidden w-11 h-11 shrink-0 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 btn-press transition-all">
+                    <i class="fas fa-paper-plane text-sm transform -translate-x-0.5"></i>
+                </button>
+                <button type="button" id="mic-btn" class="w-11 h-11 shrink-0 bg-blue-600 rounded-full text-white flex items-center justify-center shadow-lg shadow-blue-500/30 btn-press transition-all">
+                    <i class="fas fa-microphone text-sm"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- NEW CONTACT PROFILE OVERLAY (Z-INDEX 150) -->
+        <div id="user-profile-overlay" class="fixed inset-0 z-[150] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
+            <div class="px-3 py-3 glass-panel flex items-center justify-between shrink-0 sticky top-0 z-20 border-b border-gray-100 dark:border-white/5">
+                <button onclick="window.closeUserProfile()" class="w-9 h-9 rounded-full hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-center text-current btn-press">
+                    <i class="fas fa-arrow-left text-base"></i>
+                </button>
+                <h2 class="text-base font-bold">Contact Details</h2>
+                <div class="w-9"></div>
+            </div>
+
+            <div id="overlay-profile-header-bg" class="relative overflow-hidden bg-white dark:bg-[#1e293b] px-6 pt-6 pb-8 transition-all duration-300 shrink-0">
+                <div id="overlay-profile-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
+                <div class="relative z-10 flex flex-col items-center">
+                    <img id="overlay-profile-dp" src="" class="w-24 h-24 rounded-full object-cover shadow-xl border-4 border-white/40 ring-2 ring-gray-200 dark:ring-slate-700 bg-white">
+                    <h2 class="text-xl font-black flex items-center gap-1.5 mt-3 tracking-tight" id="overlay-profile-name">Name</h2>
+                    <p class="text-blue-500 font-semibold text-[11px] mt-0.5" id="overlay-profile-status-text">online</p>
+                </div>
+            </div>
+
+            <!-- Profile Actions -->
+            <div class="px-5 py-4 -mt-3 relative z-10 bg-transparent shrink-0">
+                <div class="grid grid-cols-4 gap-2">
+                    <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.closeUserProfile()">
+                        <i class="fas fa-comment-dots text-blue-500 text-base mb-1"></i>
+                        <span class="text-[10px] font-bold">Message</span>
+                    </button>
+                    <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.showToast('Notifications Muted')">
+                        <i class="fas fa-bell-slash text-amber-500 text-base mb-1"></i>
+                        <span class="text-[10px] font-bold">Mute</span>
+                    </button>
+                    <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.initiateVoiceCall(); window.closeUserProfile();">
+                        <i class="fas fa-phone-alt text-green-500 text-base mb-1"></i>
+                        <span class="text-[10px] font-bold">Call</span>
+                    </button>
+                    <button class="bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 py-3 rounded-2xl flex flex-col items-center shadow-sm btn-press" onclick="window.switchContactTab('links')">
+                        <i class="fas fa-link text-purple-500 text-base mb-1"></i>
+                        <span class="text-[10px] font-bold">Links</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- User Info Block -->
+            <div class="px-5 shrink-0 mb-4">
+                <div id="overlay-bio-card" class="bg-white dark:bg-[#1e293b] rounded-3xl shadow-sm border border-gray-100 dark:border-white/5 overflow-hidden divide-y divide-gray-50 dark:divide-white/5">
+                    <div class="px-5 py-3.5 flex items-start" id="overlay-bio-row">
+                        <div class="w-7 text-gray-400 text-sm pt-0.5"><i class="fas fa-quote-left"></i></div>
+                        <div class="flex-1">
+                            <p class="font-medium text-xs leading-snug" id="overlay-profile-bio">Bio text</p>
+                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Bio</p>
+                        </div>
+                    </div>
+                    <div class="px-5 py-3.5 flex items-center">
+                        <div class="w-7 text-gray-400 text-sm"><i class="fas fa-at"></i></div>
+                        <div class="flex-1">
+                            <p class="font-bold text-xs leading-tight" id="overlay-profile-username">@username</p>
+                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Username</p>
+                        </div>
+                        <button class="text-blue-500 text-xs font-bold" onclick="window.copyToClipboard(document.getElementById('overlay-profile-username').textContent);">Copy</button>
+                    </div>
+                    <div class="px-5 py-3.5 flex items-center" id="overlay-bday-row">
+                        <div class="w-7 text-gray-400 text-sm"><i class="fas fa-birthday-cake"></i></div>
+                        <div class="flex-1">
+                            <p class="font-bold text-xs leading-tight" id="overlay-profile-birthday">Not Provided</p>
+                            <p class="text-[10px] text-gray-400 font-bold mt-0.5 uppercase">Birthday</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tabbed Section (Posts, Media, Links) -->
+            <div class="bg-white dark:bg-[#1e293b] rounded-t-3xl shadow-sm border border-gray-100 dark:border-white/5 flex-1 overflow-hidden flex flex-col pb-safe">
+                <div class="flex items-center justify-around border-b border-gray-100 dark:border-white/5 px-2 shrink-0">
+                    <button class="flex-1 py-3.5 text-xs font-bold text-blue-600 border-b-2 border-blue-600 transition-all" id="tab-btn-posts" onclick="window.switchContactTab('posts')">Posts</button>
+                    <button class="flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all" id="tab-btn-media" onclick="window.switchContactTab('media')">Media</button>
+                    <button class="flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all" id="tab-btn-links" onclick="window.switchContactTab('links')">Links</button>
+                </div>
+                <div class="p-4 overflow-y-auto no-scrollbar flex-1 relative">
+                    <div id="overlay-profile-posts-grid" class="grid grid-cols-3 gap-1.5"></div>
+                    <div id="overlay-profile-media-grid" class="hidden grid-cols-3 gap-1.5">
+                        <div class="col-span-3 text-center py-6 text-gray-400 text-xs">No media available.</div>
+                    </div>
+                    <div id="overlay-profile-links-list" class="hidden flex-col gap-2">
+                        <div class="text-center py-6 text-gray-400 text-xs">No links available.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- FULLSCREEN INSTAGRAM/WHATSAPP STORY VIEWER (CLEAN) -->
+        <div id="story-viewer-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-black text-white touch-none">
+            <div class="absolute top-0 inset-x-0 z-10 px-3 pt-3 pb-6 bg-gradient-to-b from-black/80 to-transparent">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-2 cursor-pointer" onclick="window.openStoryViewerProfile()">
+                        <img id="story-viewer-dp" src="https://placehold.co/100" class="w-8 h-8 rounded-full object-cover">
+                        <div>
+                            <p class="text-sm font-bold flex items-center gap-1" id="story-viewer-name">User</p>
+                            <p class="text-[10px] text-white/70" id="story-viewer-time">Just now</p>
+                        </div>
+                    </div>
+                    <button onclick="window.closeStoryViewer()" class="text-white text-xl px-2 opacity-80 hover:opacity-100 btn-press"><i class="fas fa-times"></i></button>
+                </div>
+            </div>
+            
+            <div class="flex-1 relative flex items-center justify-center overflow-hidden" id="story-viewer-image-container">
+                <img id="story-viewer-img" src="" class="w-full h-full object-contain pointer-events-none">
+                <div id="story-viewer-text" class="absolute px-4 text-white text-3xl font-black drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] text-center hidden pointer-events-none" style="top: 40%; left: 50%; transform: translateX(-50%); width: 100%;"></div>
+            </div>
+            
+            <div class="absolute bottom-0 inset-x-0 z-10 p-4 bg-gradient-to-t from-black/80 to-transparent flex items-center gap-3">
+                <input type="text" id="story-reply-input" placeholder="Reply to story..." class="flex-1 bg-black/40 border border-white/30 rounded-full px-5 py-3.5 text-[13px] text-white placeholder-white/70 outline-none backdrop-blur-sm shadow-sm">
+                <button onclick="window.sendStoryReply()" class="w-12 h-12 rounded-full bg-white flex items-center justify-center shadow-lg btn-press shrink-0">
+                    <i class="fas fa-paper-plane text-blue-600 text-[15px]"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- PHOTO STORY EDITOR OVERLAY -->
+        <div id="story-editor-overlay" class="fixed inset-0 z-[150] hidden flex flex-col bg-slate-950 text-white">
+            <div class="px-4 py-3 flex items-center justify-between border-b border-white/10 shrink-0">
+                <button onclick="window.closeStoryEditor()" class="text-white text-xs font-semibold hover:opacity-80">Cancel</button>
+                <span class="font-bold text-xs">Create Photo Story</span>
+                <button onclick="window.publishStory()" class="px-3.5 py-1.5 bg-blue-600 rounded-full text-xs font-bold shadow-md hover:bg-blue-700 btn-press">Post</button>
+            </div>
+            <div class="flex-1 relative flex flex-col items-center justify-center overflow-hidden bg-black">
+                <canvas id="story-canvas" class="max-w-full max-h-full object-contain"></canvas>
+                
+                <div id="story-text-overlay" class="absolute hidden px-4 py-2 text-white font-black text-center text-3xl drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] draggable-text cursor-move" style="top: 40%; left: 50%; transform: translateX(-50%);">
+                    <span>Story Text</span>
+                </div>
+                
+                <div id="story-upload-placeholder" class="flex flex-col items-center justify-center p-6 text-center">
+                    <i class="fas fa-images text-4xl text-gray-500 mb-3"></i>
+                    <p class="text-xs font-semibold mb-3">Select a photo to start editing</p>
+                    <label class="px-4 py-2 bg-blue-600 rounded-xl text-xs font-bold cursor-pointer hover:bg-blue-700 btn-press">
+                        Choose Photo
+                        <input type="file" id="story-file-input" accept="image/*" class="hidden">
+                    </label>
+                </div>
+            </div>
+            <div class="p-3.5 bg-slate-900 border-t border-white/10 space-y-2.5 shrink-0">
+                <div class="flex items-center justify-between gap-2.5">
+                    <button onclick="window.toggleStoryBrush()" id="brush-toggle-btn" class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex items-center justify-center gap-1.5">
+                        <i class="fas fa-paint-brush"></i> Brush
+                    </button>
+                    <button onclick="window.addStoryTextPrompt()" class="flex-1 py-2 rounded-xl bg-white/10 text-xs font-bold flex items-center justify-center gap-1.5">
+                        <i class="fas fa-font"></i> Text
+                    </button>
+                    <input type="color" id="story-brush-color" value="#ef4444" class="w-8 h-8 rounded-xl border border-white/20 bg-transparent cursor-pointer">
+                </div>
+                <input type="text" id="story-caption-input" placeholder="Add a caption..." class="w-full px-3.5 py-2 bg-white/10 rounded-xl text-xs text-white placeholder-white/50 border border-white/10 outline-none">
+            </div>
+        </div>
+
+        <!-- NEW ADVANCED PROFILE COLOR PICKER OVERLAY (WITH ICONS DRAWER) -->
+        <div id="profile-color-overlay" class="fixed inset-0 z-[200] hidden flex-col bg-gray-50 dark:bg-[#0f172a] text-gray-900 dark:text-white">
+            <div class="px-4 py-3 flex items-center justify-between shrink-0 bg-white dark:bg-[#1e293b] border-b border-gray-100 dark:border-white/5">
+                <button onclick="window.closeAdvancedColorPicker()" class="text-gray-500 dark:text-white text-xl p-1 btn-press"><i class="fas fa-arrow-left"></i></button>
+                <div class="flex bg-gray-100 dark:bg-black/30 rounded-full p-1 border border-gray-200 dark:border-white/10">
+                    <button class="px-5 py-1.5 rounded-full bg-white dark:bg-white/20 text-xs font-bold text-gray-900 dark:text-white shadow-sm">Profile</button>
+                </div>
+                <button class="text-gray-500 dark:text-white text-xl p-1 btn-press"><i class="fas fa-sun"></i></button>
+            </div>
+
+            <div class="flex-1 overflow-y-auto no-scrollbar">
+                <div id="color-preview-bg" class="relative overflow-hidden bg-white dark:bg-[#1e293b] px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-gray-100 dark:border-transparent">
+                    <div id="color-preview-pattern-layer" class="absolute inset-0 pattern-backdrop pointer-events-none flex flex-wrap gap-6 p-4 justify-around"></div>
+                    <div class="relative z-10 flex flex-col items-center">
+                        <img id="color-preview-dp" src="https://placehold.co/150" class="w-20 h-20 rounded-full object-cover shadow-xl border-[3px] border-white dark:border-white/20">
+                        <h2 class="text-lg font-black flex items-center gap-1.5 mt-3 tracking-tight text-gray-900 dark:text-white" id="color-preview-name">Name</h2>
+                        <p class="text-emerald-500 font-semibold text-[11px] mt-0.5">online</p>
+                    </div>
+                </div>
+
+                <div class="p-4 -mt-6 relative z-20">
+                    <div class="bg-white dark:bg-[#1e293b] rounded-[28px] p-5 shadow-lg border border-gray-100 dark:border-white/5 space-y-5">
+                        
+                        <div class="grid grid-cols-7 gap-y-3 gap-x-2 justify-items-center" id="color-swatch-container">
+                            <button class="color-swatch w-7 h-7 rounded-full bg-blue-500" data-grad="from-blue-500 to-blue-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-green-500" data-grad="from-green-500 to-green-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-yellow-400" data-grad="from-yellow-300 to-yellow-400" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-orange-500" data-grad="from-orange-500 to-orange-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-red-500" data-grad="from-red-500 to-red-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-pink-500" data-grad="from-pink-500 to-pink-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-purple-500" data-grad="from-purple-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
+
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-blue-400 to-purple-500" data-grad="from-blue-500 to-purple-600" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-emerald-400 to-cyan-500" data-grad="from-emerald-400 to-cyan-500" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-rose-400 to-red-500" data-grad="from-rose-400 to-red-500" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-amber-400 to-orange-500" data-grad="from-amber-400 to-orange-500" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" data-grad="from-purple-500 to-pink-500" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gradient-to-br from-indigo-500 to-cyan-400" data-grad="from-indigo-500 to-cyan-400" onclick="window.selectLiveColor(this)"></button>
+                            <button class="color-swatch w-7 h-7 rounded-full bg-gray-600" data-grad="" onclick="window.selectLiveColor(this)"></button>
+                        </div>
+
+                        <!-- CUSTOM TICK COLOR SELECTION -->
+                        <div class="border-t border-gray-100 dark:border-white/10 pt-4" id="custom-tick-color-section">
+                            <p class="text-[11px] font-bold text-gray-500 dark:text-gray-400 mb-2 uppercase">Custom Verified Tick Color</p>
+                            <div class="flex overflow-x-auto no-scrollbar gap-3 pb-1" id="tick-swatch-container">
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-blue-500')"><i class="fas fa-check-circle text-blue-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-green-500')"><i class="fas fa-check-circle text-green-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-yellow-500')"><i class="fas fa-check-circle text-yellow-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-purple-500')"><i class="fas fa-check-circle text-purple-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-pink-500')"><i class="fas fa-check-circle text-pink-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-emerald-500')"><i class="fas fa-check-circle text-emerald-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-rose-500')"><i class="fas fa-check-circle text-rose-500"></i></button>
+                                <button class="w-8 h-8 shrink-0 rounded-full bg-gray-100 dark:bg-slate-700 flex items-center justify-center btn-press border-2 border-transparent hover:border-gray-400" onclick="window.selectTickColor('text-orange-500')"><i class="fas fa-check-circle text-orange-500"></i></button>
+                            </div>
+                        </div>
+
+                        <!-- ADD ICONS TO PROFILE TOGGLE MENU -->
+                        <div class="border-t border-gray-100 dark:border-white/10 pt-4">
+                            <div class="flex items-center justify-between cursor-pointer btn-press" onclick="document.getElementById('icon-selector-panel').classList.toggle('hidden')">
+                                <span class="text-[13px] font-bold text-gray-900 dark:text-white">Add Background Icons</span>
+                                <span class="text-[13px] font-bold text-blue-500 dark:text-blue-400" id="current-icon-status">Off</span>
+                            </div>
+                            
+                            <div id="icon-selector-panel" class="hidden pt-4 transition-all">
+                                <div class="flex overflow-x-auto no-scrollbar gap-3 pb-1">
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('')"><i class="fas fa-ban text-gray-400"></i></button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('👑')">👑</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('⚔️')">⚔️</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('❤️')">❤️</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('😂')">😂</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('🔥')">🔥</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('🚀')">🚀</button>
+                                    <button class="w-10 h-10 shrink-0 rounded-full bg-gray-100 dark:bg-white/5 flex items-center justify-center text-lg btn-press border-2 border-transparent hover:border-blue-500" onclick="window.selectProfileIcon('✨')">✨</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <p class="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-2">Personalize your Chatrix profile design. These colors are visible to everyone visiting your profile.</p>
+                        <button onclick="window.resetAdvancedProfileColor()" class="w-full text-left font-bold text-[13px] text-gray-900 dark:text-white border-t border-gray-100 dark:border-white/10 pt-4">Reset Profile Color</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="p-4 bg-gray-50 dark:bg-[#0f172a] shrink-0 border-t border-gray-100 dark:border-white/5 pb-safe">
+                <button onclick="window.applyAdvancedProfileColor()" class="w-full py-3.5 bg-blue-600 text-white rounded-2xl font-bold text-[13px] shadow-lg btn-press">Apply Style</button>
+            </div>
+        </div>
+
+        <!-- APP CONFIRM ALERTS (Replaces window.confirm) -->
+        <div id="custom-alert-container"></div>
+        <div id="modals-container"></div>
+
+    </div>
+
+    <!-- NEW SECURE INJECTION SCRIPT AREA -->
     <script>
         (async function() {
             try {
@@ -884,7 +791,7 @@
             }
         })();
 
-        // GLOBAL UI CONFIRM MODAL (Replaces default confirm box)
+        // GLOBAL UI CONFIRM (Replaces default confirm box)
         window.appConfirm = function(message, onConfirm) {
             const container = document.getElementById('custom-alert-container');
             if (!container) return;
@@ -892,7 +799,7 @@
             m.className = "fixed inset-0 z-[300] flex items-center justify-center alert-modal-enter";
             m.innerHTML = `
                 <div class="absolute inset-0 bg-black/60 backdrop-blur-sm" onclick="this.parentElement.remove()"></div>
-                <div class="bg-white dark:bg-slate-800 w-11/12 max-w-[320px] rounded-3xl p-6 relative z-10 shadow-2xl text-center transform scale-95 transition-transform duration-150 border border-gray-100 dark:border-white/10">
+                <div class="bg-white dark:bg-slate-800 w-11/12 max-w-[320px] rounded-3xl p-6 relative z-10 shadow-2xl text-center transform scale-95 transition-transform duration-150">
                     <div class="w-16 h-16 bg-red-100 dark:bg-red-500/20 text-red-500 rounded-full flex items-center justify-center mx-auto text-2xl mb-4">
                         <i class="fas fa-exclamation-triangle"></i>
                     </div>
@@ -900,7 +807,7 @@
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-6 leading-relaxed">${message}</p>
                     <div class="flex gap-3">
                         <button class="flex-1 py-3.5 bg-gray-100 dark:bg-slate-700 text-gray-700 dark:text-gray-200 rounded-xl font-bold text-xs btn-press" onclick="this.closest('.fixed').remove()">Cancel</button>
-                        <button class="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs btn-press shadow-lg shadow-red-500/30" id="confirm-yes-btn">Yes, Confirm</button>
+                        <button class="flex-1 py-3.5 bg-red-500 text-white rounded-xl font-bold text-xs btn-press shadow-lg shadow-red-500/30" id="confirm-yes-btn">Yes, Execute</button>
                     </div>
                 </div>
             `;
