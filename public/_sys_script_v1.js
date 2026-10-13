@@ -74,7 +74,6 @@ let typingTimeout = null;
 function encryptData(text) {
     if(!text) return text;
     try { 
-        // Avoid double encryption
         if(String(text).startsWith("CTX:")) return String(text);
         return "CTX:" + btoa(encodeURIComponent(String(text))); 
     } catch(e) { 
@@ -92,7 +91,6 @@ function decryptData(encodedText) {
             return str; 
         }
     }
-    // Fallback for older non-prefixed data
     try { 
         let raw = atob(str);
         if(/[^\x00-\x7F]/.test(raw) || str.length < 8) return str; 
@@ -121,7 +119,7 @@ const GRADIENT_MAP = {
 
 function normalizeUsername(raw) {
     if (!raw) return '';
-    return String(raw).replace(/^@+/, '').toLowerCase().trim();
+    return String(raw).replace(/^@+/, '').toLowerCase().trim(); // Strictly no spaces handled in signup
 }
 
 function formatLastSeenTime(timestamp) {
@@ -468,7 +466,7 @@ async function renderTargetProfilePosts(targetUid) {
 }
 
 // -------------------------------------------------------------
-// APP INITIALIZATION, URL ROUTING & SESSION
+// APP INITIALIZATION, URL ROUTING & SESSION (ANTI-SPAM)
 // -------------------------------------------------------------
 function hideSplash() {
     const splash = document.getElementById('splash-screen');
@@ -495,7 +493,7 @@ function checkRateLimit() {
         refreshCount++;
         localStorage.setItem('ctx_refresh_count', refreshCount);
         if(refreshCount > 6) {
-            banUntil = now + (2 * 60 * 60 * 1000);
+            banUntil = now + (2 * 60 * 60 * 1000); // 2 HOUR BAN
             localStorage.setItem('ctx_ban_until', banUntil);
             return true;
         }
@@ -570,7 +568,6 @@ async function autoLoginFromUrl(rawUser, pass) {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
         const storedPass = snap.val()?.password;
         
-        // Exact Decrypt Check Bug Fix
         if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) {
             throw new Error("Invalid URL credentials");
         }
@@ -797,7 +794,7 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
-            // STRICT ID Extraction Bug Fix
+            // STRICT ID EXTRACT TO FIX MIXUP BUGS
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -2604,7 +2601,7 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
-        // Copy verbatim to preserve exact E2E encryption
+        // Data is already encrypted in DB, copy as is for forward
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
         
@@ -2894,7 +2891,7 @@ function setupDomListeners() {
             const btn = loginBtn;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const user = normalizeUsername(document.getElementById('login-username').value).replace(/[.#$\[\]]/g, '_');
+            const user = normalizeUsername(document.getElementById('login-username').value);
             const pass = document.getElementById('login-password').value;
             try {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
@@ -2903,7 +2900,6 @@ function setupDomListeners() {
                 if (!snap.exists()) throw new Error("Invalid username or password.");
                 const storedPass = snap.val().password;
                 
-                // Allow direct unencrypted match OR decrypted match to fix lockouts
                 if (decryptData(storedPass) !== pass && storedPass !== pass) {
                      throw new Error("Invalid username or password.");
                 }
@@ -2933,7 +2929,20 @@ function setupDomListeners() {
             const btn = signupBtn;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const name = document.getElementById('signup-name').value.trim(), rawUser = normalizeUsername(document.getElementById('signup-username').value), user = rawUser.replace(/[.#$\[\]]/g, '_'), pass = document.getElementById('signup-password').value;
+            const name = document.getElementById('signup-name').value.trim();
+            let rawUser = document.getElementById('signup-username').value;
+            
+            // DENY SPACES IN USERNAME
+            if(/\s/.test(rawUser)) {
+                btn.innerHTML = originalText;
+                const errEl = document.getElementById('signup-error');
+                errEl.textContent = "Username cannot contain spaces.";
+                errEl.classList.remove('hidden');
+                return;
+            }
+            
+            const user = normalizeUsername(rawUser);
+            const pass = document.getElementById('signup-password').value;
             
             try {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
@@ -2942,16 +2951,15 @@ function setupDomListeners() {
                 if (usersSnap.exists()) {
                     const allU = usersSnap.val();
                     for (let k in allU) {
-                        if (normalizeUsername(allU[k].username) === normalizeUsername(rawUser) || k === user) {
-                            throw new Error("Username already taken by someone else.");
+                        if (normalizeUsername(allU[k].username) === user || k === user) {
+                            throw new Error("Username already taken.");
                         }
                     }
                 }
 
-                // ENCRYPT PASSWORD BEFORE SAVING
                 const encPass = encryptData(pass);
                 const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
-                const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
+                const newUser = { uid: user, name, username: user, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
                 await set(ref(db, `${dbUsersPath}/${user}`), newUser);
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now();
@@ -2976,20 +2984,16 @@ function setupDomListeners() {
     };
 
     document.getElementById('change-dp-input').onchange = async (e) => {
-        if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 240); window.currentUser.dp = b64; await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); populateUserData(); window.showToast('Profile photo updated'); }
+        if (e.target.files?.[0]) { 
+            if(e.target.files[0].size > 5 * 1024 * 1024) return window.showToast("File must be under 5MB", "exclamation-circle", "text-red-400");
+            const b64 = await fileToBase64(e.target.files[0], 240); 
+            window.currentUser.dp = b64; 
+            await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); 
+            localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); 
+            populateUserData(); 
+            window.showToast('Profile photo updated'); 
+        }
     };
-
-    // PREMIUM BUTTON ROUTING FIX
-    const premiumBtnAction = document.getElementById('premium-btn-action');
-    if (premiumBtnAction) {
-        premiumBtnAction.onclick = () => {
-            if (window.currentUser && window.currentUser.isPremium) {
-                window.openAdvancedColorPicker(); 
-            } else {
-                window.openPremiumModal(); 
-            }
-        };
-    }
 
     const msgInput = document.getElementById('message-input'), sendBtn = document.getElementById('send-btn'), micBtn = document.getElementById('mic-btn');
     if(msgInput) {
