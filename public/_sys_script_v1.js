@@ -23,7 +23,6 @@ const dbChatsPath = `artifacts/${APP_ID}/chats`;
 const dbUserChatsPath = `artifacts/${APP_ID}/userChats`;
 const dbStoriesPath = `artifacts/${APP_ID}/stories`;
 const dbGroupsPath = `artifacts/${APP_ID}/groups`;
-const dbStickerPacksPath = `artifacts/${APP_ID}/stickerPacks`;
 
 // STATE & GLOBALS
 window.currentUser = null;
@@ -49,12 +48,6 @@ let storyImage = null;
 let isBrushActive = false;
 let isDrawing = false;
 
-let smCanvas = null;
-let smCtx = null;
-let smImage = null;
-let isSMDrawing = false;
-let isSMBrushActive = true;
-
 let messagesUnsub = null;
 let liveStatusUnsub = null;
 let typingStatusUnsub = null; 
@@ -74,7 +67,6 @@ let typingTimeout = null;
 function encryptData(text) {
     if(!text) return text;
     try { 
-        if(String(text).startsWith("CTX:")) return String(text);
         return "CTX:" + btoa(encodeURIComponent(String(text))); 
     } catch(e) { 
         return String(text); 
@@ -84,24 +76,17 @@ function encryptData(text) {
 function decryptData(encodedText) {
     if(!encodedText) return encodedText;
     const str = String(encodedText);
-    
-    // Process prefixed data
     if (str.startsWith("CTX:")) {
         try { 
             return decodeURIComponent(atob(str.substring(4))); 
         } catch(e) { 
-            return str; // Return encoded raw if decoding fails
+            return str; 
         }
     }
-    
-    // Fail-safe backward compatibility logic for plain text & basic Base64
     try { 
-        // Attempt basic Base64 decoding, but catch errors safely
-        let raw = atob(str);
-        if(/[^\x00-\x7F]/.test(raw) || str.length < 8) return str; 
-        return decodeURIComponent(raw); 
+        return decodeURIComponent(atob(str)); 
     } catch(e) { 
-        return str; // Simply return the plain text
+        return str; 
     }
 }
 
@@ -188,17 +173,14 @@ window.openUserProfileDirect = async function(uid) {
 
     let u = allUsersCache[uid];
     if (!u) {
-        try {
-            const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
-            if (snap.exists()) u = snap.val();
-        } catch(e) {
-            console.error("Profile load fail", e);
-        }
+        const snap = await get(child(ref(db), `${dbUsersPath}/${uid}`));
+        if (snap.exists()) u = snap.val();
     }
     if (!u) return window.showToast("User not found", "exclamation-circle", "text-red-400");
 
     document.getElementById('overlay-profile-dp').src = u.dp || 'https://placehold.co/150';
     
+    // Check Custom Tick Color
     let tColor = u.verifiedTickColor || 'text-blue-500';
     let verifiedIcon = (u.isVerified || u.isPremium) ? `<i class="fas fa-check-circle ${tColor} text-xs ml-1"></i>` : '';
     document.getElementById('overlay-profile-name').innerHTML = `${u.name} ${verifiedIcon}`;
@@ -309,7 +291,7 @@ window.renderStoriesFeed = async function() {
             container.appendChild(card);
         });
     } catch (e) {
-        console.error("Story load issue:", e);
+        console.error(e);
     }
 };
 
@@ -471,7 +453,7 @@ async function renderTargetProfilePosts(targetUid) {
 }
 
 // -------------------------------------------------------------
-// APP INITIALIZATION, URL ROUTING & SESSION (ANTI-SPAM)
+// APP INITIALIZATION, URL ROUTING & SESSION
 // -------------------------------------------------------------
 function hideSplash() {
     const splash = document.getElementById('splash-screen');
@@ -486,100 +468,11 @@ function hideSplash() {
     }
 }
 
-let lastRefreshTime = localStorage.getItem('ctx_last_refresh') || 0;
-let refreshCount = localStorage.getItem('ctx_refresh_count') || 0;
-let banUntil = localStorage.getItem('ctx_ban_until') || 0;
-
-function checkRateLimit() {
-    const now = Date.now();
-    if(now < banUntil) return true;
-    
-    if(now - lastRefreshTime < 10000) { 
-        refreshCount++;
-        localStorage.setItem('ctx_refresh_count', refreshCount);
-        if(refreshCount > 6) {
-            banUntil = now + (2 * 60 * 60 * 1000); // 2 HOUR BAN
-            localStorage.setItem('ctx_ban_until', banUntil);
-            return true;
-        }
-    } else {
-        refreshCount = 1;
-        localStorage.setItem('ctx_refresh_count', refreshCount);
-    }
-    localStorage.setItem('ctx_last_refresh', now);
-    return false;
-}
-
-window.startBanCountdown = function(until) {
-    const box = document.getElementById('ban-timer-box');
-    const timerText = document.getElementById('ban-countdown');
-    if(box) box.classList.remove('hidden');
-    
-    const x = setInterval(() => {
-        const now = Date.now();
-        const dist = until - now;
-        if(dist < 0) {
-            clearInterval(x);
-            localStorage.removeItem('ctx_ban_until');
-            window.location.reload();
-        } else {
-            let h = Math.floor((dist % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-            let m = Math.floor((dist % (1000 * 60 * 60)) / (1000 * 60));
-            let s = Math.floor((dist % (1000 * 60)) / 1000);
-            if(timerText) timerText.innerText = `${h.toString().padStart(2,'0')}:${m.toString().padStart(2,'0')}:${s.toString().padStart(2,'0')}`;
-        }
-    }, 1000);
-}
-
-function showBanScreen(userObj = null, isSpam = false, spamTime = 0) {
-    const banOverlay = document.getElementById('banned-overlay');
-    if(!banOverlay) return;
-    
-    const dp = document.getElementById('banned-dp');
-    const name = document.getElementById('banned-name');
-    const uname = document.getElementById('banned-username');
-    const title = document.getElementById('banned-title-msg');
-    const reason = document.getElementById('banned-reason-msg');
-    const btn = document.getElementById('ban-appeal-btn');
-
-    if(userObj) {
-        if(dp) dp.src = userObj.dp;
-        if(name) name.innerText = userObj.name;
-        if(uname) uname.innerText = `@${userObj.username}`;
-    }
-
-    if(isSpam) {
-        title.innerText = "Temporary Rate Limit Ban";
-        reason.innerText = "You have been temporarily blocked for sending too many automated requests or refreshing rapidly. Please wait for the timer to expire.";
-        if(btn) btn.classList.add('hidden'); 
-        window.startBanCountdown(spamTime);
-    } else {
-        title.innerText = "This account can no longer use Chatrix";
-        reason.innerText = "Your account has been permanently restricted by an Admin due to violations of our Community Guidelines or Terms of Service.";
-        if(btn) btn.classList.remove('hidden');
-        document.getElementById('ban-timer-box')?.classList.add('hidden');
-    }
-
-    banOverlay.classList.remove('hidden');
-    banOverlay.style.display = 'flex';
-    hideSplash();
-}
-
-// Global initialization flag
-let isAppInitialized = false;
-
 async function autoLoginFromUrl(rawUser, pass) {
-    if(checkRateLimit()) return showBanScreen(null, true, banUntil);
-
-    const user = normalizeUsername(rawUser);
+    const user = normalizeUsername(rawUser).replace(/[.#$\[\]]/g, '_');
     try {
         const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
-        const storedPass = snap.val()?.password;
-        
-        // Exact Decrypt Check
-        if (!snap.exists() || (decryptData(storedPass) !== pass && storedPass !== pass)) {
-            throw new Error("Invalid URL credentials");
-        }
+        if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid URL credentials");
         
         window.currentUser = snap.val();
         localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
@@ -595,8 +488,6 @@ async function autoLoginFromUrl(rawUser, pass) {
 }
 
 async function checkSession() {
-    if(checkRateLimit()) return showBanScreen(null, true, banUntil);
-
     const saved = localStorage.getItem('chatrix_user');
     if (!saved) {
         switchMainView('login-view');
@@ -619,14 +510,12 @@ async function checkSession() {
         }
     } catch (err) {
         switchMainView('login-view');
+    } finally {
         hideSplash();
-    } 
+    }
 }
 
 function initApp() {
-    if(isAppInitialized) return;
-    isAppInitialized = true;
-    
     try {
         applyStoredAppearance();
         setupDomListeners();
@@ -646,18 +535,15 @@ function initApp() {
     }
 }
 
-// Safe invocation
 if (document.readyState === 'loading') {
     window.addEventListener('DOMContentLoaded', initApp);
 } else {
     initApp();
 }
 
-function proceedToMainApp() {
-    if (window.currentUser && window.currentUser.isBanned) {
-        return showBanScreen(window.currentUser, false, 0);
-    }
+setTimeout(() => { hideSplash(); }, 2500);
 
+function proceedToMainApp() {
     populateUserData();
     switchMainView('main-app');
     
@@ -744,13 +630,16 @@ function listenToUsersLive() {
             if (window.currentUser && allUsersCache[window.currentUser.uid]) {
                 window.currentUser = allUsersCache[window.currentUser.uid];
                 
+                const banOverlay = document.getElementById('banned-overlay');
                 if(window.currentUser.isBanned) {
-                    showBanScreen(window.currentUser, false, 0);
-                    if(messagesUnsub) messagesUnsub();
-                    if(liveStatusUnsub) liveStatusUnsub();
-                    if(window.targetChatMetaUnsub) window.targetChatMetaUnsub();
+                    if(document.getElementById('banned-dp')) document.getElementById('banned-dp').src = window.currentUser.dp;
+                    if(document.getElementById('banned-name')) document.getElementById('banned-name').innerText = window.currentUser.name;
+                    if(document.getElementById('banned-username')) document.getElementById('banned-username').innerText = `@${window.currentUser.username}`;
+                    if(banOverlay) {
+                        banOverlay.classList.remove('hidden');
+                        banOverlay.style.display = 'flex';
+                    }
                 } else {
-                    const banOverlay = document.getElementById('banned-overlay');
                     if(banOverlay) {
                         banOverlay.classList.add('hidden');
                         banOverlay.style.display = 'none';
@@ -794,8 +683,6 @@ function listenToActiveChatsLive() {
     if (!window.currentUser?.uid) return;
     const myChatsRef = ref(db, `${dbUserChatsPath}/${window.currentUser.uid}`);
     onValue(myChatsRef, async (snapshot) => {
-        if(window.currentUser?.isBanned) return; 
-        
         const data = snapshot.val();
         if (!data) {
             activeChatsList = [];
@@ -807,7 +694,7 @@ function listenToActiveChatsLive() {
         for (let cId of Object.keys(data)) {
             const chatMeta = data[cId];
             
-            // STRICT ID EXTRACT TO FIX MIXUP BUGS
+            // EXACT NAME BUG FIX: Strict ID extraction without array index mixups
             let otherUid = chatMeta.targetUid;
             if (!otherUid && !chatMeta.isGroup) {
                 if (cId.startsWith(window.currentUser.uid + '_')) {
@@ -849,7 +736,7 @@ function listenToActiveChatsLive() {
                 tickColor = u.verifiedTickColor || 'text-blue-500';
             }
             
-            let displayLastMsg = chatMeta.lastMessage ? decryptData(chatMeta.lastMessage) : 'Conversation started';
+            let displayLastMsg = decryptData(chatMeta.lastMessage) || 'Conversation started';
 
             list.push({
                 id: cId, targetUid: otherUid || null, name: name || 'User', username: username || 'user',
@@ -889,7 +776,7 @@ function renderChatList() {
         const div = document.createElement('div');
         div.className = `flex items-center px-5 py-3.5 cursor-pointer border-b border-gray-100 dark:border-white/5 transition-colors ${chat.pinned ? 'pinned-bg' : 'hover:bg-gray-50 dark:hover:bg-slate-800'}`;
 
-        let vHtml = chat.isVerified ? `<i class="fas fa-check-circle ${chat.tickColor} text-[10px] ml-1"></i>` : '';
+        let vHtml = chat.isVerified ? `<i class="fas fa-check-circle ${chat.tickColor} text-[10px]"></i>` : '';
 
         div.innerHTML = `
             ${isSelectionMode ? `<input type="checkbox" class="w-4 h-4 rounded mr-3 text-blue-600 pointer-events-none" ${isSelected ? 'checked' : ''}>` : ''}
@@ -899,12 +786,12 @@ function renderChatList() {
             </div>
             <div class="flex-1 min-w-0">
                 <div class="flex justify-between items-center mb-0.5">
-                    <h4 class="font-bold text-xs truncate flex items-center gap-1 text-gray-900 dark:text-white">${chat.name}${vHtml}</h4>
-                    <span class="text-[10px] text-gray-400 shrink-0 ml-2">${chat.time || ''}</span>
+                    <h4 class="font-bold text-xs truncate flex items-center gap-1 text-gray-900 dark:text-white">${chat.name} ${vHtml}</h4>
+                    <span class="text-[10px] text-gray-400">${chat.time || ''}</span>
                 </div>
                 <div class="flex justify-between items-center">
-                    <p class="text-xs ${chat.unread ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-500'} truncate mr-2">${chat.lastMessage}</p>
-                    ${chat.unread ? '<div class="unread-dot shrink-0"></div>' : ''}
+                    <p class="text-xs ${chat.unread ? 'font-bold text-gray-900 dark:text-gray-100' : 'text-gray-500'} truncate">${chat.lastMessage}</p>
+                    ${chat.unread ? '<div class="unread-dot ml-2"></div>' : ''}
                 </div>
             </div>
         `;
@@ -974,7 +861,7 @@ function openChat(chat) {
         window.targetChatMetaUnsub = onValue(ref(db, `${dbUserChatsPath}/${chat.targetUid}/${chat.id}/unread`), (snap) => {
             if(window.activeChatUserId !== chat.targetUid) return;
             window.isTargetUnread = snap.exists() ? snap.val() : true;
-            renderMessagesUI(); 
+            renderMessagesUI();
         });
     }
 
@@ -1099,16 +986,12 @@ window.deleteActiveChatAction = () => {
 function loadLiveMessages(chatId) {
     const container = document.getElementById('messages-container');
     if (!container) return;
-    
-    const existingSpins = container.querySelectorAll('.fa-spinner');
-    if(existingSpins.length === 0 && currentChatMessages.length === 0) {
-        container.innerHTML += '<div class="p-6 text-center text-gray-400 text-xs w-full"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>';
-    }
+    container.innerHTML = '<div class="p-6 text-center text-gray-400 text-xs"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>';
 
     if (messagesUnsub) { messagesUnsub(); messagesUnsub = null; }
 
     messagesUnsub = onValue(ref(db, `${dbChatsPath}/${chatId}/messages`), (snapshot) => {
-        if(window.activeChatId !== chatId) return; 
+        if(window.activeChatId !== chatId) return; // double check
 
         const data = snapshot.val();
         if (!data) {
@@ -1120,12 +1003,7 @@ function loadLiveMessages(chatId) {
         const msgs = Object.keys(data).map(k => ({ id: k, ...data[k] }));
         msgs.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
         currentChatMessages = msgs;
-        
-        try {
-            renderMessagesUI();
-        } catch(e) {
-            console.error("Render msg error safe bypassed.", e);
-        }
+        renderMessagesUI();
     });
 }
 
@@ -1134,7 +1012,7 @@ function renderMessagesUI() {
     if (!container) return;
     
     if (currentChatMessages.length === 0) {
-        container.innerHTML = '<div class="py-16 text-center text-gray-400 text-xs font-semibold w-full">No messages yet. Send a message to start!</div>';
+        container.innerHTML = '<div class="py-16 text-center text-gray-400 text-xs font-semibold">No messages yet. Send a message to start!</div>';
         return;
     }
 
@@ -1192,28 +1070,22 @@ function renderMessagesUI() {
                     </button>
                     <span class="text-[11px] font-bold">Voice Note</span>
                 </div>`;
-        } else if (m.type === 'sticker') {
-            content = `<img src="${m.imageUrl}" class="w-32 h-32 object-contain select-none" alt="Sticker">`;
         } else {
-            // Decrypt Fail-Safe applied here to prevent blank bubbles
-            let rawText = decryptData(m.text) || '';
+            let rawText = decryptData(m.text);
             content = `<p class="text-xs font-medium leading-relaxed whitespace-pre-wrap break-words">${formatMessageTextWithMentionsAndLinks(rawText, isMe)}</p>`;
         }
 
         const timeStr = m.time || (m.timestamp ? new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '');
         const editedTag = m.edited ? `<span class="text-[9px] opacity-75 ml-1 italic">(edited)</span>` : '';
 
-        let bubbleClass = m.type === 'sticker' ? 'chat-bubble-sticker' : (isMe ? 'chat-bubble-sent' : 'chat-bubble-received');
-        let timestampShadow = m.type === 'sticker' ? 'text-shadow: 0 1px 2px rgba(0,0,0,0.5); color: #fff;' : '';
-
         div.innerHTML = `
             ${senderAvatarHtml}
-            <div class="max-w-[82%] rounded-2xl px-3.5 py-2 relative flex flex-col ${bubbleClass} cursor-pointer select-none">
+            <div class="max-w-[82%] rounded-2xl px-3.5 py-2 relative flex flex-col ${isMe ? 'chat-bubble-sent' : 'chat-bubble-received'} cursor-pointer select-none">
                 ${senderNameHtml}
                 ${forwardHeader}
                 ${replySnippet}
                 ${content}
-                <span class="text-[9px] text-right mt-1 opacity-80 font-bold" style="${timestampShadow}">${editedTag} ${timeStr} ${isMe && m.type !== 'sticker' ? '<i class="fas fa-check-double text-[8px] ml-1"></i>' : ''}</span>
+                <span class="text-[9px] text-right mt-1 opacity-80 font-bold">${editedTag} ${timeStr} ${isMe ? '<i class="fas fa-check-double text-[8px] ml-1"></i>' : ''}</span>
             </div>
         `;
 
@@ -1286,7 +1158,7 @@ window.handleMentionClick = async (targetUsername) => {
     });
 };
 
-async function dispatchMessage(text, img = null, audio = null, isSticker = false) {
+async function dispatchMessage(text, img = null, audio = null) {
     if (!window.activeChatId || !window.currentUser) return;
 
     if (window.activeChatIsGroup) {
@@ -1308,10 +1180,9 @@ async function dispatchMessage(text, img = null, audio = null, isSticker = false
     const timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     
     let textToSend = text ? encryptData(text) : null;
-    let msgType = isSticker ? 'sticker' : (img ? 'image' : (audio ? 'audio' : 'text'));
 
     const msgPayload = {
-        senderId: window.currentUser.uid, type: msgType,
+        senderId: window.currentUser.uid, type: img ? 'image' : (audio ? 'audio' : 'text'),
         text: textToSend, imageUrl: img || null, audioUrl: audio || null,
         timestamp: now, time: timeStr, replyTo: currentReplyTarget
     };
@@ -1319,11 +1190,7 @@ async function dispatchMessage(text, img = null, audio = null, isSticker = false
     window.cancelReply();
     await push(ref(db, `${dbChatsPath}/${window.activeChatId}/messages`), msgPayload);
 
-    let previewRaw = 'Voice note';
-    if(text) previewRaw = text;
-    else if(isSticker) previewRaw = 'Sticker';
-    else if(img) previewRaw = 'Photo';
-    
+    const previewRaw = text || (img ? 'Photo' : 'Voice note');
     const previewEncrypted = encryptData(previewRaw);
     
     const isSelf = window.activeChatUserId === window.currentUser.uid;
@@ -1344,369 +1211,6 @@ async function dispatchMessage(text, img = null, audio = null, isSticker = false
         });
     }
 }
-
-// -------------------------------------------------------------
-// STICKER STUDIO LOGIC
-// -------------------------------------------------------------
-let currentActivePackId = null;
-let stickerPacksCache = {};
-
-window.openStickerStudio = () => {
-    document.getElementById('sticker-studio-overlay').classList.remove('hidden');
-    document.getElementById('sticker-studio-overlay').style.display = 'flex';
-    window.switchStickerTab('my');
-};
-
-window.closeStickerStudio = () => {
-    document.getElementById('sticker-studio-overlay').classList.add('hidden');
-    document.getElementById('sticker-studio-overlay').style.display = 'none';
-};
-
-window.switchStickerTab = (tab) => {
-    document.getElementById('tab-btn-mystickers').className = 'flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all';
-    document.getElementById('tab-btn-explore').className = 'flex-1 py-3.5 text-xs font-bold text-gray-500 dark:text-gray-400 transition-all';
-    document.getElementById('my-stickers-tab').classList.add('hidden');
-    document.getElementById('explore-stickers-tab').classList.add('hidden');
-
-    if(tab === 'my') {
-        document.getElementById('tab-btn-mystickers').className = 'flex-1 py-3.5 text-xs font-bold text-pink-500 border-b-2 border-pink-500 transition-all';
-        document.getElementById('my-stickers-tab').classList.remove('hidden');
-        loadMyStickerPacks();
-    } else {
-        document.getElementById('tab-btn-explore').className = 'flex-1 py-3.5 text-xs font-bold text-pink-500 border-b-2 border-pink-500 transition-all';
-        document.getElementById('explore-stickers-tab').classList.remove('hidden');
-        loadExploreStickerPacks();
-    }
-};
-
-window.openCreateStickerPackModal = () => {
-    let html = `
-        <div class="space-y-3">
-            <h3 class="text-base font-bold text-gray-900">New Sticker Pack</h3>
-            <input type="text" id="new-pack-name" placeholder="Pack Name..." class="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold outline-none">
-            <div class="flex gap-2">
-                <button onclick="window.closeModal(this)" class="flex-1 py-2.5 bg-gray-100 rounded-xl font-bold text-xs btn-press">Cancel</button>
-                <button onclick="window.createStickerPack(this)" class="flex-1 py-2.5 bg-pink-600 text-white rounded-xl font-bold text-xs btn-press shadow">Create Pack</button>
-            </div>
-        </div>
-    `;
-    renderModalHTML(html);
-};
-
-window.createStickerPack = async (btn) => {
-    const name = btn.closest('.bg-white').querySelector('#new-pack-name').value.trim();
-    if (!name) return window.showToast('Pack name required', 'exclamation-circle', 'text-red-400');
-
-    const packId = 'pack_' + Date.now();
-    await set(ref(db, `${dbStickerPacksPath}/${packId}`), {
-        id: packId, name, authorUid: window.currentUser.uid, authorName: window.currentUser.name, 
-        createdAt: Date.now(), stickers: []
-    });
-    
-    let installed = window.currentUser.installedPacks || {};
-    installed[packId] = true;
-    await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { installedPacks: installed });
-    window.currentUser.installedPacks = installed;
-    localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
-
-    window.showToast("Pack Created!");
-    window.closeModal(btn);
-    loadMyStickerPacks();
-};
-
-async function loadMyStickerPacks() {
-    const list = document.getElementById('my-sticker-packs-list');
-    list.innerHTML = `<div class="text-center py-6 text-gray-400 text-xs font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Loading...</div>`;
-
-    const snap = await get(ref(db, dbStickerPacksPath));
-    const allPacks = snap.exists() ? snap.val() : {};
-    stickerPacksCache = allPacks;
-
-    const myInstalled = window.currentUser.installedPacks || {};
-    let html = '';
-
-    Object.keys(myInstalled).forEach(packId => {
-        if(allPacks[packId]) {
-            const p = allPacks[packId];
-            const scount = p.stickers ? Object.keys(p.stickers).length : 0;
-            const previewImg = scount > 0 ? Object.values(p.stickers)[0] : 'https://placehold.co/100/ec4899/fff?text=S';
-            html += `
-                <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer btn-press" onclick="window.openSinglePackView('${packId}')">
-                    <div class="flex items-center gap-3">
-                        <img src="${previewImg}" class="w-12 h-12 rounded-xl object-cover bg-gray-50 border border-gray-100">
-                        <div>
-                            <h4 class="font-bold text-xs text-gray-900 dark:text-white">${p.name}</h4>
-                            <p class="text-[10px] text-gray-400">${scount} Stickers • By ${p.authorUid === window.currentUser.uid ? 'You' : p.authorName}</p>
-                        </div>
-                    </div>
-                    <i class="fas fa-chevron-right text-gray-300 text-xs"></i>
-                </div>
-            `;
-        }
-    });
-
-    if(!html) html = `<div class="text-center py-10 text-gray-400 text-xs font-bold">No sticker packs installed. Go to Explore to find more!</div>`;
-    list.innerHTML = html;
-}
-
-async function loadExploreStickerPacks() {
-    const list = document.getElementById('explore-stickers-tab');
-    list.innerHTML = `<div class="text-center py-6 text-gray-400 text-xs font-bold"><i class="fas fa-spinner fa-spin mr-1"></i> Loading Explore...</div>`;
-
-    const snap = await get(ref(db, dbStickerPacksPath));
-    const allPacks = snap.exists() ? snap.val() : {};
-    stickerPacksCache = allPacks;
-
-    const myInstalled = window.currentUser.installedPacks || {};
-    let html = '';
-
-    Object.keys(allPacks).forEach(packId => {
-        const p = allPacks[packId];
-        const scount = p.stickers ? Object.keys(p.stickers).length : 0;
-        if(scount === 0) return; 
-
-        const isInstalled = myInstalled[packId] === true;
-        const previewImg = Object.values(p.stickers)[0];
-        
-        let btnHtml = isInstalled 
-            ? `<button onclick="window.togglePackInstall('${packId}', false, event)" class="px-3 py-1.5 bg-gray-100 text-gray-500 rounded-lg text-[10px] font-bold btn-press">Remove</button>`
-            : `<button onclick="window.togglePackInstall('${packId}', true, event)" class="px-3 py-1.5 bg-pink-100 text-pink-600 rounded-lg text-[10px] font-bold btn-press">Add Pack</button>`;
-
-        html += `
-            <div class="flex items-center justify-between p-3 bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-100 dark:border-white/5 cursor-pointer btn-press" onclick="window.openSinglePackView('${packId}')">
-                <div class="flex items-center gap-3">
-                    <img src="${previewImg}" class="w-12 h-12 rounded-xl object-cover bg-gray-50 border border-gray-100">
-                    <div>
-                        <h4 class="font-bold text-xs text-gray-900 dark:text-white">${p.name}</h4>
-                        <p class="text-[10px] text-gray-400">${scount} Stickers • By ${p.authorName}</p>
-                    </div>
-                </div>
-                <div>${btnHtml}</div>
-            </div>
-        `;
-    });
-
-    if(!html) html = `<div class="text-center py-10 text-gray-400 text-xs font-bold">No public sticker packs found yet.</div>`;
-    list.innerHTML = html;
-}
-
-window.togglePackInstall = async (packId, install, event) => {
-    if(event) event.stopPropagation();
-    let installed = window.currentUser.installedPacks || {};
-    if(install) installed[packId] = true;
-    else delete installed[packId];
-    
-    await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { installedPacks: installed });
-    window.currentUser.installedPacks = installed;
-    localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
-    window.showToast(install ? "Pack Added" : "Pack Removed");
-    loadExploreStickerPacks();
-};
-
-window.openSinglePackView = (packId) => {
-    currentActivePackId = packId;
-    const p = stickerPacksCache[packId];
-    document.getElementById('single-pack-title').innerText = p.name;
-    
-    const grid = document.getElementById('single-pack-grid');
-    grid.innerHTML = '';
-    
-    if(p.stickers) {
-        Object.keys(p.stickers).forEach(sId => {
-            const url = p.stickers[sId];
-            grid.innerHTML += `
-                <div class="relative group aspect-square bg-gray-100 dark:bg-slate-800 rounded-xl overflow-hidden shadow-sm flex items-center justify-center p-1">
-                    <img src="${url}" class="w-full h-full object-contain">
-                    ${p.authorUid === window.currentUser.uid ? `<button onclick="window.deleteSingleSticker('${packId}', '${sId}')" class="absolute top-1 right-1 w-6 h-6 bg-red-500 text-white rounded-full text-[10px] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center shadow"><i class="fas fa-times"></i></button>` : ''}
-                </div>
-            `;
-        });
-    }
-    
-    const overlay = document.getElementById('single-pack-overlay');
-    overlay.classList.remove('hidden');
-    overlay.style.display = 'flex';
-    setTimeout(()=> overlay.classList.remove('translate-x-full'), 10);
-};
-
-window.closeSinglePackView = () => {
-    const overlay = document.getElementById('single-pack-overlay');
-    overlay.classList.add('translate-x-full');
-    setTimeout(()=> { overlay.classList.add('hidden'); overlay.style.display='none'; }, 300);
-    loadMyStickerPacks();
-};
-
-window.deleteCurrentStickerPack = () => {
-    if(!currentActivePackId) return;
-    const p = stickerPacksCache[currentActivePackId];
-    if(p.authorUid !== window.currentUser.uid) return window.showToast("You can only delete your own packs", "exclamation-circle", "text-red-400");
-    
-    window.appConfirm("Delete this entire sticker pack?", async () => {
-        await remove(ref(db, `${dbStickerPacksPath}/${currentActivePackId}`));
-        let installed = window.currentUser.installedPacks || {};
-        delete installed[currentActivePackId];
-        await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { installedPacks: installed });
-        window.currentUser.installedPacks = installed;
-        localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
-        window.showToast("Pack deleted");
-        window.closeSinglePackView();
-    });
-};
-
-window.deleteSingleSticker = (packId, sId) => {
-    window.appConfirm("Delete this sticker?", async () => {
-        await remove(ref(db, `${dbStickerPacksPath}/${packId}/stickers/${sId}`));
-        stickerPacksCache[packId].stickers[sId] = null;
-        delete stickerPacksCache[packId].stickers[sId];
-        window.openSinglePackView(packId); 
-    });
-};
-
-// --- MAKER CANVAS LOGIC (512x512 with 5MB strict limit) ---
-window.openStickerMaker = () => {
-    const p = stickerPacksCache[currentActivePackId];
-    if(p.authorUid !== window.currentUser.uid) return window.showToast("Cannot add to others' packs. Make your own pack first.", "exclamation-circle", "text-red-400");
-    
-    document.getElementById('sticker-maker-overlay').classList.remove('hidden');
-    document.getElementById('sticker-maker-overlay').style.display = 'flex';
-    
-    smCanvas = document.getElementById('sticker-draw-canvas');
-    smCtx = smCanvas.getContext('2d');
-    window.clearSMCanvas();
-};
-
-window.closeStickerMaker = () => {
-    document.getElementById('sticker-maker-overlay').classList.add('hidden');
-    document.getElementById('sticker-maker-overlay').style.display = 'none';
-    document.getElementById('sm-text-preview').innerText = '';
-    document.getElementById('sticker-maker-text-layer').classList.add('hidden');
-};
-
-window.clearSMCanvas = () => {
-    smCtx.clearRect(0, 0, smCanvas.width, smCanvas.height);
-    document.getElementById('sm-text-preview').innerText = '';
-    document.getElementById('sticker-maker-text-layer').classList.add('hidden');
-    smImage = null;
-};
-
-window.toggleSMBrush = () => {
-    isSMBrushActive = !isSMBrushActive;
-    const btn = document.getElementById('sm-brush-btn');
-    if(isSMBrushActive) btn.classList.replace('bg-white/10', 'bg-pink-500/30');
-    else btn.classList.replace('bg-pink-500/30', 'bg-white/10');
-};
-
-window.addSMText = () => {
-    const t = prompt("Enter text for sticker:");
-    if(t) { 
-        const el = document.getElementById('sm-text-preview'); 
-        el.innerText = t; 
-        document.getElementById('sticker-maker-text-layer').classList.remove('hidden'); 
-    }
-};
-
-const smImgInput = document.getElementById('sm-image-upload');
-if(smImgInput) {
-    smImgInput.onchange = (e) => {
-        const file = e.target.files?.[0];
-        if(!file) return;
-        if(file.size > 5 * 1024 * 1024) return window.showToast("File must be under 5MB", "exclamation-circle", "text-red-400");
-        
-        const reader = new FileReader();
-        reader.onload = (event) => {
-            smImage = new Image();
-            smImage.onload = () => {
-                let s = Math.min(smCanvas.width / smImage.width, smCanvas.height / smImage.height);
-                let w = smImage.width * s, h = smImage.height * s;
-                let dx = (smCanvas.width - w) / 2, dy = (smCanvas.height - h) / 2;
-                smCtx.drawImage(smImage, dx, dy, w, h);
-            };
-            smImage.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
-    };
-}
-
-const cvs2 = document.getElementById('sticker-draw-canvas');
-if (cvs2) {
-    const draw2 = (e) => {
-        if (!isSMDrawing || !isSMBrushActive) return;
-        const rect = cvs2.getBoundingClientRect(), scaleX = cvs2.width / rect.width, scaleY = cvs2.height / rect.height;
-        const x = (e.clientX || e.touches?.[0]?.clientX - rect.left) * scaleX, y = (e.clientY || e.touches?.[0]?.clientY - rect.top) * scaleY;
-        smCtx.lineWidth = 15; smCtx.lineCap = 'round'; smCtx.strokeStyle = document.getElementById('sm-color-picker')?.value || '#ec4899';
-        smCtx.lineTo(x, y); smCtx.stroke(); smCtx.beginPath(); smCtx.moveTo(x, y);
-    };
-    cvs2.addEventListener('mousedown', (e) => { isSMDrawing = true; draw2(e); });
-    cvs2.addEventListener('mousemove', draw2);
-    cvs2.addEventListener('mouseup', () => { isSMDrawing = false; smCtx?.beginPath(); });
-    cvs2.addEventListener('touchstart', (e) => { isSMDrawing = true; draw2(e); }, {passive: true});
-    cvs2.addEventListener('touchmove', draw2, {passive: true});
-    cvs2.addEventListener('touchend', () => { isSMDrawing = false; smCtx?.beginPath(); });
-}
-
-window.saveCreatedSticker = async () => {
-    const txtEl = document.getElementById('sm-text-preview');
-    if(txtEl && txtEl.innerText) {
-        smCtx.font = "bold 60px Inter";
-        smCtx.fillStyle = document.getElementById('sm-color-picker')?.value || "#000";
-        smCtx.textAlign = "center";
-        smCtx.textBaseline = "middle";
-        smCtx.fillText(txtEl.innerText, smCanvas.width/2, smCanvas.height/2);
-    }
-    
-    const b64 = smCanvas.toDataURL('image/png', 0.8);
-    const sid = 's_' + Date.now();
-    await set(ref(db, `${dbStickerPacksPath}/${currentActivePackId}/stickers/${sid}`), b64);
-    
-    if(!stickerPacksCache[currentActivePackId].stickers) stickerPacksCache[currentActivePackId].stickers = {};
-    stickerPacksCache[currentActivePackId].stickers[sid] = b64;
-    
-    window.showToast("Sticker saved to pack!");
-    window.closeStickerMaker();
-    window.openSinglePackView(currentActivePackId); 
-};
-
-
-// CHAT INPUT STICKER DRAWER
-window.toggleChatStickerDrawer = async () => {
-    const drawer = document.getElementById('chat-sticker-drawer');
-    if(drawer.classList.contains('hidden')) {
-        drawer.classList.remove('hidden');
-        drawer.style.display = 'flex';
-        const grid = document.getElementById('chat-sticker-grid');
-        grid.innerHTML = '<div class="col-span-4 text-center text-xs p-4"><i class="fas fa-spinner fa-spin"></i></div>';
-        
-        const snap = await get(ref(db, dbStickerPacksPath));
-        const allPacks = snap.exists() ? snap.val() : {};
-        const myInstalled = window.currentUser.installedPacks || {};
-        
-        let html = '';
-        Object.keys(myInstalled).forEach(pid => {
-            if(allPacks[pid] && allPacks[pid].stickers) {
-                Object.keys(allPacks[pid].stickers).forEach(sid => {
-                    const url = allPacks[pid].stickers[sid];
-                    html += `<img src="${url}" class="w-full aspect-square object-contain cursor-pointer btn-press hover:bg-gray-100 rounded-lg p-1" onclick="window.sendChatSticker('${url}')">`;
-                });
-            }
-        });
-        
-        if(!html) html = '<div class="col-span-4 text-center text-[10px] text-gray-400 p-4">No stickers. Add from Studio!</div>';
-        grid.innerHTML = html;
-        
-    } else {
-        drawer.classList.add('hidden');
-        drawer.style.display = 'none';
-    }
-};
-
-window.sendChatSticker = (url) => {
-    dispatchMessage(null, url, null, true); 
-    window.toggleChatStickerDrawer(); 
-};
-
-// -------------------------------------------------------------
-// SEARCH, HISTORY & CONTACT UTILS
-// -------------------------------------------------------------
 
 function performLiveSearch(query) {
     const list = document.getElementById('search-results-list');
@@ -1740,11 +1244,11 @@ function performLiveSearch(query) {
         const div = document.createElement('div');
         div.className = 'flex items-center px-5 py-3 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer btn-press border-b border-gray-100 dark:border-white/5 transition-colors';
         
-        let vHtml = u.isVerified ? `<i class="fas fa-check-circle ${u.tickColor} text-xs ml-1"></i>` : '';
+        let vHtml = u.isVerified ? `<i class="fas fa-check-circle ${u.tickColor} text-xs"></i>` : '';
         div.innerHTML = `
             <img src="${u.dp}" class="w-11 h-11 rounded-full object-cover mr-3.5 shadow-sm bg-white border border-gray-50 dark:border-white/10">
             <div class="flex-1 min-w-0">
-                <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">${u.name}${vHtml}</h4>
+                <h4 class="font-bold text-sm text-gray-900 dark:text-white flex items-center gap-1">${u.name} ${vHtml}</h4>
                 <p class="text-xs text-blue-500">@${u.username}</p>
             </div>
             <i class="fas fa-comment-dots text-gray-300 dark:text-gray-600 text-base"></i>
@@ -1876,23 +1380,16 @@ function populateUserData() {
     if (typeof window.renderMyProfilePosts === 'function') window.renderMyProfilePosts();
 }
 
-// -------------------------------------------------------------
-// PROFILE COVER STYLING & GRADIENT BUILDER
-// -------------------------------------------------------------
 function applyProfileCoverStyle(user, prefix) {
     const header = document.getElementById(`${prefix}-header-bg`);
     const pattern = document.getElementById(`${prefix}-pattern-layer`);
     if (!header) return;
 
     if (user.isPremium && (user.profileGradient || user.profilePatternIcon)) {
-        if(user.profileGradient && user.profileGradient.startsWith('custom:')) {
-            const parts = user.profileGradient.split(':');
-            header.style.background = `linear-gradient(135deg, ${parts[1]}, ${parts[2]})`;
-        } else {
-            const grad = user.profileGradient || '';
-            const cssGradient = GRADIENT_MAP[grad] || 'linear-gradient(to bottom, #1f2937, #111827)';
-            header.style.backgroundImage = cssGradient;
-        }
+        const grad = user.profileGradient || '';
+        const cssGradient = GRADIENT_MAP[grad] || 'linear-gradient(to bottom, #1f2937, #111827)';
+        
+        header.style.backgroundImage = cssGradient;
         
         if(prefix === 'settings') {
              header.className = `flex flex-col items-center pt-4 pb-6 rounded-3xl transition-all duration-300 text-white shrink-0 border border-transparent relative overflow-hidden`;
@@ -1912,7 +1409,7 @@ function applyProfileCoverStyle(user, prefix) {
             pattern.innerHTML = '';
         }
     } else {
-        header.style.background = 'none';
+        header.style.backgroundImage = 'none';
         if(prefix === 'settings') {
              header.className = 'flex flex-col items-center mb-0 pt-2 rounded-3xl p-4 transition-all duration-300 bg-white dark:bg-[#1e293b] border border-gray-100 dark:border-white/5 shrink-0 relative overflow-hidden text-gray-900 dark:text-white';
         } else if(prefix === 'overlay-profile') {
@@ -1924,7 +1421,6 @@ function applyProfileCoverStyle(user, prefix) {
     }
 }
 
-// ... APPEARANCE SETTINGS ...
 function applyStoredAppearance() {
     const config = JSON.parse(localStorage.getItem('chatrix_appearance') || '{}');
     const isDark = config.darkMode === true;
@@ -1952,6 +1448,10 @@ function applyStoredAppearance() {
     if (config.wallpaper) document.documentElement.style.setProperty('--chat-wallpaper', `url(${config.wallpaper})`);
     else document.documentElement.style.setProperty('--chat-wallpaper', 'none');
 }
+
+// -------------------------------------------------------------
+// MODALS, PREMIUM FLOW & ADVANCED COLOR PICKER
+// -------------------------------------------------------------
 
 window.openAppearanceModal = () => {
     const config = JSON.parse(localStorage.getItem('chatrix_appearance') || '{}');
@@ -2013,17 +1513,10 @@ window.openAdvancedColorPicker = () => {
     
     const previewBg = document.getElementById('color-preview-bg');
     if (tempSelectedGradient) {
-        if(tempSelectedGradient.startsWith('custom:')) {
-            const parts = tempSelectedGradient.split(':');
-            previewBg.style.background = `linear-gradient(135deg, ${parts[1]}, ${parts[2]})`;
-            document.getElementById('adv-color-1').value = parts[1];
-            document.getElementById('adv-color-2').value = parts[2];
-        } else {
-            previewBg.style.backgroundImage = GRADIENT_MAP[tempSelectedGradient];
-        }
+        previewBg.style.backgroundImage = GRADIENT_MAP[tempSelectedGradient];
         previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-transparent text-white`;
     } else {
-        previewBg.style.background = 'none';
+        previewBg.style.backgroundImage = 'none';
         previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-gray-100 dark:border-transparent bg-white dark:bg-[#1e293b]`;
     }
 
@@ -2066,23 +1559,12 @@ window.selectLiveColor = (btn) => {
     const previewBg = document.getElementById('color-preview-bg');
     
     if(tempSelectedGradient) {
-        previewBg.style.background = GRADIENT_MAP[tempSelectedGradient];
+        previewBg.style.backgroundImage = GRADIENT_MAP[tempSelectedGradient];
         previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-transparent text-white`;
     } else {
-        previewBg.style.background = 'none';
+        previewBg.style.backgroundImage = 'none';
         previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-gray-100 dark:border-transparent bg-white dark:bg-[#1e293b]`;
     }
-};
-
-window.updateLiveAdvancedGradient = () => {
-    const c1 = document.getElementById('adv-color-1').value;
-    const c2 = document.getElementById('adv-color-2').value;
-    document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
-    
-    tempSelectedGradient = `custom:${c1}:${c2}`;
-    const previewBg = document.getElementById('color-preview-bg');
-    previewBg.style.background = `linear-gradient(135deg, ${c1}, ${c2})`;
-    previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-transparent text-white`;
 };
 
 window.selectProfileIcon = (icon) => {
@@ -2099,6 +1581,7 @@ window.selectProfileIcon = (icon) => {
     }
 };
 
+// CUSTOM TICK COLOR UPDATER
 window.selectTickColor = async (colorClass) => {
     if (!window.currentUser.isPremium) {
         window.showToast("Premium feature!", "lock", "text-amber-500");
@@ -2138,16 +1621,13 @@ window.resetAdvancedProfileColor = () => {
     tempSelectedGradient = '';
     tempSelectedIcon = '';
     const previewBg = document.getElementById('color-preview-bg');
-    previewBg.style.background = 'none';
+    previewBg.style.backgroundImage = 'none';
     previewBg.className = `relative overflow-hidden px-6 pt-6 pb-12 transition-all duration-300 rounded-b-[35px] shadow-sm border-b border-gray-100 dark:border-transparent bg-white dark:bg-[#1e293b]`;
     document.querySelectorAll('.color-swatch').forEach(b => b.classList.remove('active'));
     document.getElementById('color-preview-pattern-layer').innerHTML = '';
     document.getElementById('current-icon-status').innerText = 'Off';
 };
 
-// -------------------------------------------------------------
-// PREMIUM MODAL & OTHERS
-// -------------------------------------------------------------
 
 window.openPremiumModal = () => {
     const html = `
@@ -2185,16 +1665,6 @@ window.submitPremiumUtr = async (btn) => {
     const utr = modal.querySelector('#premium-utr-input').value.trim();
     if (!utr || utr.length < 6) return window.showToast('Please enter a valid UTR number', 'exclamation-circle', 'text-red-400');
     
-    // ANTI-SPAM PREMIUM REQUEST
-    let premReqCount = parseInt(localStorage.getItem('ctx_prem_req') || '0');
-    if(premReqCount > 3) {
-        banUntil = Date.now() + (5 * 60 * 60 * 1000); 
-        localStorage.setItem('ctx_ban_until', banUntil);
-        window.closeModal(btn);
-        return showBanScreen(null, true, banUntil);
-    }
-    localStorage.setItem('ctx_prem_req', premReqCount + 1);
-
     btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
     
     const welcomeId = [OFFICIAL_SYSTEM_UID, window.currentUser.uid].sort().join('_');
@@ -2256,17 +1726,17 @@ window.openModernEditModal = (field) => {
 
 window.saveModernEdit = async (field, btn) => {
     const modal = btn.closest('.bg-white');
-    let newVal = modal.querySelector('#edit-field-input').value.trim();
+    const newVal = modal.querySelector('#edit-field-input').value.trim();
     if (!newVal) return;
 
     if (field === 'username') {
-        newVal = newVal.replace(/\s+/g, '').toLowerCase(); 
-        if (RESERVED_USERNAMES.includes(newVal)) {
+        const cleanNew = normalizeUsername(newVal);
+        if (RESERVED_USERNAMES.includes(cleanNew)) {
             return window.showToast("Username is reserved", "exclamation-circle", "text-red-400");
         }
         let taken = false;
         for (let uid in allUsersCache) {
-            if (uid !== window.currentUser.uid && normalizeUsername(allUsersCache[uid].username) === newVal) {
+            if (uid !== window.currentUser.uid && normalizeUsername(allUsersCache[uid].username) === cleanNew) {
                 taken = true; break;
             }
         }
@@ -2620,14 +2090,11 @@ window.confirmForward = async (msgId, btn) => {
     const m = msgSnap.val(), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }), forwardSenderName = window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'Chatrix User');
 
     for (let targetChatId of selected) {
-        // Copy verbatim to preserve exact E2E encryption
         const msgPayload = { senderId: window.currentUser.uid, type: m.type || 'text', text: m.text || null, imageUrl: m.imageUrl || null, audioUrl: m.audioUrl || null, timestamp: now, time: timeStr, forwardedFrom: { name: forwardSenderName } };
         await push(ref(db, `${dbChatsPath}/${targetChatId}/messages`), msgPayload);
         
-        const rawPreview = m.text ? decryptData(m.text) : null;
-        let preview = '';
-        if(m.type === 'sticker') preview = 'Sticker';
-        else preview = rawPreview || (m.imageUrl ? 'Photo' : 'Voice note');
+        const rawPreview = decryptData(m.text);
+        const preview = rawPreview || (m.imageUrl ? 'Photo' : 'Voice note');
         
         await update(ref(db, `${dbUserChatsPath}/${window.currentUser.uid}/${targetChatId}`), { lastMessage: encryptData(`Forwarded: ${preview}`), timestamp: now, unread: false });
         
@@ -2677,15 +2144,7 @@ window.saveEditedMessage = async (msgId, btn) => {
 window.downloadChatImage = (url) => { const a = document.createElement('a'); a.href = url; a.download = `chatrix_img_${Date.now()}.jpg`; document.body.appendChild(a); a.click(); document.body.removeChild(a); window.showToast("Image downloading..."); };
 
 window.initiateReply = (msgId) => {
-    let rawText = '';
-    const el = document.getElementById(`msg-${msgId}`);
-    if(el) {
-         const p = el.querySelector('p');
-         if(p) rawText = p.innerText;
-         else if(el.querySelector('img.w-32')) rawText = 'Sticker';
-         else if(el.querySelector('img')) rawText = 'Photo';
-    }
-    const textSnippet = (rawText || 'Message').slice(0, 35);
+    const textSnippet = (document.getElementById(`msg-${msgId}`)?.innerText || 'Message').slice(0, 35);
     currentReplyTarget = { id: msgId, senderName: window.activeChatUser?.isSelf ? 'Saved Messages' : (window.activeChatUser?.name || 'User'), textSnippet };
     document.getElementById('reply-to-user').textContent = `Replying to ${currentReplyTarget.senderName}`;
     document.getElementById('reply-to-text').textContent = currentReplyTarget.textSnippet;
@@ -2910,19 +2369,14 @@ function setupDomListeners() {
             const btn = loginBtn;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const user = normalizeUsername(document.getElementById('login-username').value);
+            const user = normalizeUsername(document.getElementById('login-username').value).replace(/[.#$\[\]]/g, '_');
             const pass = document.getElementById('login-password').value;
             try {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
                 const snap = await get(child(ref(db), `${dbUsersPath}/${user}`));
                 
-                if (!snap.exists()) throw new Error("Invalid username or password.");
-                const storedPass = snap.val().password;
-                
-                if (decryptData(storedPass) !== pass && storedPass !== pass) {
-                     throw new Error("Invalid username or password.");
-                }
-                
+                // DECRYPT PASSWORD FOR CHECKING
+                if (!snap.exists() || decryptData(snap.val().password) !== pass) throw new Error("Invalid username or password.");
                 window.currentUser = snap.val(); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser));
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now(), timeStr = new Date(now).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -2948,19 +2402,7 @@ function setupDomListeners() {
             const btn = signupBtn;
             const originalText = btn.innerHTML;
             btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-            const name = document.getElementById('signup-name').value.trim();
-            let rawUser = document.getElementById('signup-username').value;
-            
-            if(/\s/.test(rawUser)) {
-                btn.innerHTML = originalText;
-                const errEl = document.getElementById('signup-error');
-                errEl.textContent = "Username cannot contain spaces.";
-                errEl.classList.remove('hidden');
-                return;
-            }
-            
-            const user = normalizeUsername(rawUser);
-            const pass = document.getElementById('signup-password').value;
+            const name = document.getElementById('signup-name').value.trim(), rawUser = normalizeUsername(document.getElementById('signup-username').value), user = rawUser.replace(/[.#$\[\]]/g, '_'), pass = document.getElementById('signup-password').value;
             
             try {
                 if (RESERVED_USERNAMES.includes(user)) throw new Error("Reserved username.");
@@ -2969,15 +2411,16 @@ function setupDomListeners() {
                 if (usersSnap.exists()) {
                     const allU = usersSnap.val();
                     for (let k in allU) {
-                        if (normalizeUsername(allU[k].username) === user || k === user) {
-                            throw new Error("Username already taken.");
+                        if (normalizeUsername(allU[k].username) === normalizeUsername(rawUser) || k === user) {
+                            throw new Error("Username already taken by someone else.");
                         }
                     }
                 }
 
+                // ENCRYPT PASSWORD BEFORE SAVING
                 const encPass = encryptData(pass);
                 const dp = document.getElementById('dp-preview').src || `https://placehold.co/150x150/2563EB/ffffff?text=${name.charAt(0).toUpperCase()}`;
-                const newUser = { uid: user, name, username: user, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
+                const newUser = { uid: user, name, username: rawUser, password: encPass, dp, bio: 'Trust once lost is never found again.', birthday: '', isPremium: false };
                 await set(ref(db, `${dbUsersPath}/${user}`), newUser);
 
                 const welcomeId = [OFFICIAL_SYSTEM_UID, user].sort().join('_'), now = Date.now();
@@ -3002,24 +2445,17 @@ function setupDomListeners() {
     };
 
     document.getElementById('change-dp-input').onchange = async (e) => {
-        if (e.target.files?.[0]) { 
-            if(e.target.files[0].size > 5 * 1024 * 1024) return window.showToast("File must be under 5MB", "exclamation-circle", "text-red-400");
-            const b64 = await fileToBase64(e.target.files[0], 240); 
-            window.currentUser.dp = b64; 
-            await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); 
-            localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); 
-            populateUserData(); 
-            window.showToast('Profile photo updated'); 
-        }
+        if (e.target.files?.[0]) { const b64 = await fileToBase64(e.target.files[0], 240); window.currentUser.dp = b64; await update(ref(db, `${dbUsersPath}/${window.currentUser.uid}`), { dp: b64 }); localStorage.setItem('chatrix_user', JSON.stringify(window.currentUser)); populateUserData(); window.showToast('Profile photo updated'); }
     };
 
+    // PREMIUM BUTTON ROUTING FIX
     const premiumBtnAction = document.getElementById('premium-btn-action');
     if (premiumBtnAction) {
         premiumBtnAction.onclick = () => {
             if (window.currentUser && window.currentUser.isPremium) {
-                window.openAdvancedColorPicker(); 
+                window.openAdvancedColorPicker(); // Directly open tick colors
             } else {
-                window.openPremiumModal(); 
+                window.openPremiumModal(); // Show UTR payment page
             }
         };
     }
@@ -3092,6 +2528,133 @@ function setupDomListeners() {
 // -------------------------------------------------------------
 // HELPER UTILITIES
 // -------------------------------------------------------------
+
+window.handleLogout = () => { localStorage.removeItem('chatrix_user'); window.currentUser = null; switchMainView('login-view'); };
+
+window.confirmDeleteAccount = () => {
+    window.appConfirm("Permanently delete your Chatrix account?", async () => {
+        await remove(ref(db, `${dbUsersPath}/${window.currentUser.uid}`));
+        window.handleLogout(); window.showToast('Account deleted');
+    });
+};
+
+window.switchTab = (tabId) => {
+    ['home', 'stories', 'settings', 'profile'].forEach(t => {
+        const el = document.getElementById(`${t}-tab`);
+        if (el) { el.classList.toggle('tab-visible', t === tabId); el.classList.toggle('tab-hidden', t !== tabId); }
+    });
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+        const active = btn.dataset.target === tabId;
+        btn.classList.toggle('nav-btn-active', active); btn.classList.toggle('text-blue-600', active); btn.classList.toggle('text-gray-400', !active);
+    });
+    if (tabId === 'stories' && typeof window.renderStoriesFeed === 'function') window.renderStoriesFeed();
+    if (tabId === 'profile' && typeof window.renderMyProfilePosts === 'function') window.renderMyProfilePosts();
+};
+
+window.showToast = (msg, icon = 'check-circle', color = 'text-green-400') => {
+    const t = document.getElementById('toast'); if (!t) return;
+    document.getElementById('toast-icon').innerHTML = `<i class="fas fa-${icon} ${color}"></i>`;
+    document.getElementById('toast-msg').textContent = msg;
+    t.classList.remove('-translate-y-[200%]'); setTimeout(() => t.classList.add('-translate-y-[200%]'), 3000);
+};
+
+function renderModalHTML(htmlContent) {
+    const container = document.getElementById('modals-container'); if (!container) return;
+    const m = document.createElement('div'); m.className = "fixed inset-0 z-[150] flex items-end justify-center sm:items-center modal-enter";
+    m.innerHTML = `
+        <div class="absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity" onclick="window.closeModal()"></div>
+        <div class="bg-white w-full max-w-sm rounded-t-3xl sm:rounded-3xl p-5 relative z-10 shadow-2xl transition-transform duration-300 transform translate-y-full sm:translate-y-0 text-gray-900">
+            <div class="w-10 h-1 bg-gray-200 rounded-full mx-auto mb-4 sm:hidden"></div>
+            ${htmlContent}
+        </div>
+    `;
+    container.appendChild(m);
+    setTimeout(() => { m.classList.add('modal-enter-active'); m.querySelector('.bg-white')?.classList.remove('translate-y-full'); }, 10);
+}
+
+window.closeModal = (btn) => {
+    if (!btn) { document.querySelectorAll('.modal-enter-active, #modals-container > div').forEach(el => el.remove()); return; }
+    const modalWrap = btn.closest('.fixed') || btn.closest('.modal-enter-active');
+    if (modalWrap) modalWrap.remove(); else document.querySelectorAll('.modal-enter-active, #modals-container > div').forEach(el => el.remove());
+};
+
+window.copyToClipboard = (text) => { navigator.clipboard.writeText(text); window.showToast('Copied to clipboard'); };
+window.scrollToMessage = (id) => { const el = document.getElementById(id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' }); };
+
+function fileToBase64(file, maxWidth = 720) {
+    return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            const img = new Image();
+            img.onload = () => {
+                const canvas = document.createElement('canvas');
+                let w = img.width, h = img.height;
+                if (w > maxWidth) { h = Math.round((h * maxWidth) / w); w = maxWidth; }
+                canvas.width = w; canvas.height = h;
+                const ctx = canvas.getContext('2d'); ctx.drawImage(img, 0, 0, w, h);
+                resolve(canvas.toDataURL('image/jpeg', 0.65));
+            };
+            img.src = e.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+window.previewImage = (url) => {
+    const html = `
+        <div class="relative">
+            <img src="${url}" class="w-full max-h-[70vh] object-contain rounded-2xl shadow-2xl">
+            <button class="w-full mt-4 py-3 bg-gray-100 rounded-xl font-bold btn-press text-xs" onclick="window.closeModal(this)">Close</button>
+        </div>
+    `;
+    renderModalHTML(html);
+};
+
+window.triggerScamWarning = (encodedUrl) => {
+    const rawUrl = decodeURIComponent(encodedUrl);
+    const html = `
+        <div class="text-center space-y-3">
+            <div class="w-12 h-12 bg-red-100 text-red-600 rounded-full flex items-center justify-center mx-auto text-xl"><i class="fas fa-shield-alt"></i></div>
+            <h3 class="text-base font-bold text-gray-900">Scam Alert</h3>
+            <p class="text-xs text-gray-500">External links may be unsafe. Continue only if you trust the destination.</p>
+            <p class="text-[11px] font-mono bg-gray-100 p-2 rounded-xl text-gray-700 break-all select-all">${rawUrl}</p>
+            <div class="flex gap-2 pt-2">
+                <button onclick="window.closeModal(this)" class="flex-1 py-3 bg-gray-100 text-gray-700 font-bold rounded-xl text-xs btn-press">Cancel</button>
+                <button onclick="window.confirmOpenLink('${encodeURIComponent(rawUrl)}', this)" class="flex-1 py-3 bg-red-600 text-white font-bold rounded-xl text-xs btn-press shadow-md">Open Link</button>
+            </div>
+        </div>
+    `;
+    renderModalHTML(html);
+};
+
+window.confirmOpenLink = (encUrl, btn) => { window.open(decodeURIComponent(encUrl), '_blank', 'noopener,noreferrer'); window.closeModal(btn); };
+window.toggleChatMenu = (e) => { e.stopPropagation(); document.getElementById('chat-menu-dropdown')?.classList.toggle('hidden'); };
+
+window.openChatLinkHistory = () => {
+    const msgsContainer = document.getElementById('messages-container');
+    const aTags = msgsContainer ? msgsContainer.querySelectorAll('a.web-link') : [];
+    let listHtml = '';
+    aTags.forEach(a => {
+        const url = a.textContent;
+        listHtml += `
+            <div class="p-2.5 bg-gray-50 rounded-xl flex items-center justify-between border border-gray-100 mb-1.5">
+                <div class="min-w-0 flex-1 pr-2"><a href="javascript:void(0)" onclick="window.triggerScamWarning('${encodeURIComponent(url)}')" class="text-xs font-bold text-blue-600 truncate block">${url}</a></div>
+                <i class="fas fa-external-link-alt text-gray-400 text-xs"></i>
+            </div>
+        `;
+    });
+    const html = `
+        <div class="space-y-3">
+            <h3 class="text-base font-bold flex items-center gap-2"><i class="fas fa-link text-blue-500"></i> Shared Links</h3>
+            <div class="max-h-60 overflow-y-auto no-scrollbar space-y-2">${listHtml || '<p class="text-xs text-gray-400 text-center py-6">No links shared in this conversation.</p>'}</div>
+            <button onclick="window.closeModal(this)" class="w-full py-2.5 bg-gray-100 rounded-xl font-bold text-xs btn-press">Close</button>
+        </div>
+    `;
+    renderModalHTML(html);
+};
+
+window.toggleEnterIsSend = (checked) => { enterIsSend = checked; localStorage.setItem('chatrix_enter_is_send', checked ? 'true' : 'false'); window.showToast(`Enter is send: ${checked ? 'ON' : 'OFF'}`); };
+
 window.playAudio = (btn, url) => {
     const icon = btn.querySelector('i');
     if (btn._audio && !btn._audio.paused) { btn._audio.pause(); icon.className = 'fas fa-play'; return; }
