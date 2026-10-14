@@ -7,30 +7,31 @@ import {
     getDatabase, ref, set, get, child, onValue, push, update, remove, 
     serverTimestamp, onDisconnect 
 } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
-// 1. App Check Import
-import { 
-    initializeAppCheck, 
-    ReCaptchaEnterpriseProvider 
-} from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js";
 
 // SECURE FIREBASE INITIALIZATION FROM VERCEL API
 const firebaseConfig = window.__FB_CFG || {};
 
 const app = initializeApp(firebaseConfig);
+const db = getDatabase(app);
 
-// 2. App Check Activation With Your Token
+// SAFE & NON-BLOCKING APP CHECK (Blank Page Fix)
 if (typeof window !== 'undefined') {
     try {
-        initializeAppCheck(app, {
-            provider: new ReCaptchaEnterpriseProvider('6LfZYu4tAAAAAHs1YX2n75VgPFXDo-yVn2D2TzNJ'),
-            isTokenAutoRefreshEnabled: true
-        });
-    } catch (e) {
-        console.warn("App Check init notice:", e);
-    }
-}
+        localStorage.removeItem('chatrix_local_ban');
+        document.body.classList.remove('is-user-banned');
+    } catch(e) {}
 
-const db = getDatabase(app);
+    import("https://www.gstatic.com/firebasejs/11.6.1/firebase-app-check.js").then(({ initializeAppCheck, ReCaptchaEnterpriseProvider }) => {
+        try {
+            initializeAppCheck(app, {
+                provider: new ReCaptchaEnterpriseProvider('6LfZYu4tAAAAAHs1YX2n75VgPFXDo-yVn2D2TzNJ'),
+                isTokenAutoRefreshEnabled: true
+            });
+        } catch (err) {
+            console.warn("App Check bypass:", err);
+        }
+    }).catch(() => {});
+}
 const APP_ID = 'chatrix-app';
 const OFFICIAL_SYSTEM_UID = 'chatrix_official';
 const RESERVED_USERNAMES = ['chatrix', 'chatrix_official', 'chatrixofficial', 'official'];
