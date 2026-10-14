@@ -1,38 +1,19 @@
 {
-  "redirects": [
+  "rewrites": [
     {
-      "source": "/_sys_script_v1.js",
-      "missing": [
+      "source": "/((?!_sys_).*\\.(?:js|css))",
+      "destination": "/api/invalid.js"
+    },
+    {
+      "source": "/(_sys_.*\\.(?:js|css))",
+      "has": [
         {
           "type": "header",
-          "key": "x-chatrix-token",
-          "value": "v1-internal"
+          "key": "sec-fetch-dest",
+          "value": "document"
         }
       ],
-      "destination": "/api/invalid.js",
-      "permanent": false
-    },
-    {
-      "source": "/_sys_style_v1.css",
-      "missing": [
-        {
-          "type": "header",
-          "key": "x-chatrix-token",
-          "value": "v1-internal"
-        }
-      ],
-      "destination": "/api/invalid.js",
-      "permanent": false
-    },
-    {
-      "source": "/script.js",
-      "destination": "/api/invalid.js",
-      "permanent": false
-    },
-    {
-      "source": "/style.css",
-      "destination": "/api/invalid.js",
-      "permanent": false
+      "destination": "/api/invalid.js"
     }
   ]
 }
