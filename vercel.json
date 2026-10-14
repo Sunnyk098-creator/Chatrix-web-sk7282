@@ -1,12 +1,19 @@
 {
   "rewrites": [
     {
-      "source": "_sys_script_v1.js",
-      "destination": "/api/invalid"
+      "source": "/((?!_sys_).*\\.(?:js|css))",
+      "destination": "/api/invalid.js"
     },
     {
-      "source": "/style.css",
-      "destination": "/api/invalid"
+      "source": "/(_sys_.*\\.(?:js|css))",
+      "has": [
+        {
+          "type": "header",
+          "key": "sec-fetch-dest",
+          "value": "document"
+        }
+      ],
+      "destination": "/api/invalid.js"
     }
   ]
 }
