@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {
-      "source": "/script.js",
+      "source": "/_sys_script_v1.js",
       "destination": "/api/invalid"
     },
     {
